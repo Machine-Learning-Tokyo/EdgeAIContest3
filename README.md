@@ -10,3 +10,11 @@ This repository is to work on the [The 3rd AI Edge Contest](https://signate.jp/c
     ├── notebook        # Jupyter Notebooks (exploration/modelling/evaluation)
     ├── LICENSE         
     └── README.md       
+
+## Setup data
+Please download data from the competition into the ```data/``` folder:
+*After setting the signate CLI [link](https://pypi.org/project/signate/)*
+```
+cd data/
+signate download --competition-id=256
+```
