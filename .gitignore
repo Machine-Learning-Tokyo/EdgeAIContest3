@@ -1,2 +1,4 @@
 # Ignore subfolder of folder
 data/*/*
+data/*.zip
+data/*.tar.xz
