@@ -2,3 +2,8 @@
 data/*/*
 data/*.zip
 data/*.tar.xz
+
+# Notebooks
+notebook/.ipynb_checkpoints/Data_preparation-checkpoint.ipynb
+notebook/__pycache__/
+*.ipynb
