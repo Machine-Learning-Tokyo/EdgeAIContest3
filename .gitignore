@@ -4,6 +4,20 @@ data/*.zip
 data/*.tar.xz
 
 # Notebooks
-notebook/.ipynb_checkpoints/Data_preparation-checkpoint.ipynb
-notebook/__pycache__/
-*.ipynb
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Python
+*.pyc
+*.pyo
+
+# Source
+src/darknet/*
+src/tf2-yolov4/*
+
+# Model
+*.h5
+
+# Yolo
+notebook/signate*
+data/yolo*
