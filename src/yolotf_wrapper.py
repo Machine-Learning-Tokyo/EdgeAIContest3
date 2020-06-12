@@ -99,7 +99,35 @@ class yolov4_inference():
         # Clean prediction output
         bbox, scores, classes_pred = self.filter_prediction(bbox, scores[0], classes_pred[0].astype(int))
 
-        return([bbox, scores, classes_pred])
+        # Convert to Signate frame output here:
+        signate_detection = self.convert_to_signate(bbox, scores, classes_pred)
+        return([bbox, scores, classes_pred, signate_detection])
+
+    def convert_to_signate(self, bbox, scores, classes_pred):
+        """Convert YOLO output into signate frame format:
+            -input: bbox, scores, classes_pred
+            -ouput: {'Car':[],'pedestrian':[]}
+        """
+        person_list = []
+        car_list = []
+        for bbox, score, cl in zip(bbox, scores, classes_pred):
+            if score > 0:
+                label = CLASSES[cl]
+
+                if label == "person":
+                    person_list.append({"box2d":bbox})
+
+                else:
+                    car_list.append({"box2d":bbox})
+
+        # add in the frame (if not empty)
+        current_frame = {}
+        if car_list:
+            current_frame["Car"] = car_list
+        if person_list:
+            current_frame["Pedestrian"] = person_list
+
+        return(current_frame)
 
     def display_on_frame(self, frame, boxes, scores, classes_pred):
         """Display all filtered bboxs and annotations on frame."""

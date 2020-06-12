@@ -1,6 +1,7 @@
 # Process pipeline draft
 from yolotf_wrapper import yolov4_inference
 import signate_sub
+from object_tracker import Tracker
 
 import cv2
 import numpy as np
@@ -32,6 +33,9 @@ def main():
     h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 15.0, (int(w), int(h)))
 
+    # Init Tracker
+    tracker = Tracker((w, h))
+
     ret = True
     while ret:
         prev_time = time.time()
@@ -39,18 +43,18 @@ def main():
 
         try:
             # Detection
-            boxes, scores, classes_pred = model.detect(frame)
+            boxes, scores, classes_pred, pred_detection = model.detect(frame)
             print("\nInference time: {} ms.".format(round(1/(time.time()-prev_time), 3)))
 
             # Tracking
-            ids = np.random.randint(100, size=len(boxes))
-            print("Currently tracking: {} objects".format(len(ids)))
+            pred_tracking = tracker.assign_ids(pred_detection)
+            print(pred_tracking)
 
             # Generate Signate format
-            signate_output.add_frame(boxes, classes_pred, scores, ids)
+            signate_output.add_frame(pred_tracking)
 
             # Display on frame
-            model.display_on_frame(frame, boxes, scores, classes_pred)
+            signate_output.display_on_frame(frame, pred_tracking)
 
             cv2.imshow('Demo', frame)
             out.write(frame)

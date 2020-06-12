@@ -2,6 +2,7 @@
 import json
 import numpy as np
 import os
+import cv2
 
 CLASSES = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
@@ -40,7 +41,7 @@ class signate_submission():
 
         self.filter = ["person", "car"]
 
-    def add_frame(self, bbox, classes_pred, scores, ids):
+    def add_frame_old(self, bbox, classes_pred, scores, ids):
         """Add a new frame to submission sequence."""
         person_list = []
         car_list = []
@@ -63,6 +64,10 @@ class signate_submission():
 
         self.sequences.append([current_frame])
 
+    def add_frame(self, pred_tracking):
+        """Simply add the prediction to the output file."""
+        self.sequences.append([pred_tracking])
+
     def write_submit(self):
         """Write final json file."""
         # Fill sequence with all frame
@@ -74,3 +79,13 @@ class signate_submission():
 
         output_json_file.close()
         print("Submission file generated: {}".format(self.ouput_file_name))
+
+    def display_on_frame(self, frame, pred_tracking):
+        """Display all filtered bboxs and annotations on frame."""
+        for cls, annot in pred_tracking.items():
+            color = (255, 0, 0) if cls=="Pedestrian" else (0, 0, 255)
+            for a in annot:
+                xmin, ymin, xmax, ymax = list(map(int, a['box2d']))
+                cv2.rectangle(frame, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color, 4)
+                text = "id: " + str({a['id']})
+                cv2.putText(frame, text, (int(xmin), int(ymin)), cv2.FONT_HERSHEY_SIMPLEX, 2, color, 3)
