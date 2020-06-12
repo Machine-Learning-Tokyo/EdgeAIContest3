@@ -1,7 +1,6 @@
 # COCO loader and display:
 # Sources: https://qiita.com/harmegiddo/items/da131ae5bcddbbbde41f
 
-import IPython
 import os
 import json
 import random

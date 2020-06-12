@@ -20,6 +20,11 @@ cd data/
 signate download --competition-id=256
 ```
 
+Extract frame and explore the data with the different Notebooks.
+
+**Faster to extract frame:**
+```ffmpeg -i data/train_videos/train_00.mp4 data/train_images/train_00/train%04d.png```
+
 ## Object detection
 
 ### Retinanet
