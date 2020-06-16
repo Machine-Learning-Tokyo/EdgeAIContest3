@@ -19,6 +19,8 @@ src/signate_output.json
 
 # Model
 *.h5
+*.h5.frozen
+model/*
 
 # Yolo
 notebook/signate*

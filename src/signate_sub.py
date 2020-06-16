@@ -34,12 +34,13 @@ class NpEncoder(json.JSONEncoder):
             return super(NpEncoder, self).default(obj)
 
 class signate_submission():
-    def __init__(self, classe_list, file_name="signate_output.json"):
+    def __init__(self, classe_list, file_name="prediction.json"):
         self.ouput_file_name = file_name
         self.sequences = []
+        self.videos = []
         self.out_json = []
 
-        self.filter = ["person", "car"]
+        self.filter = ["Pedestrian", "Car"]
 
     def add_frame_old(self, bbox, classes_pred, scores, ids):
         """Add a new frame to submission sequence."""
@@ -49,7 +50,7 @@ class signate_submission():
             if score > 0:
                 label = CLASSES[cl]
 
-                if label == "person":
+                if label == "Pedestrian":
                     person_list.append({"id": _id, "box2d":bbox})
 
                 else:
@@ -65,20 +66,24 @@ class signate_submission():
         self.sequences.append([current_frame])
 
     def add_frame(self, pred_tracking):
-        """Simply add the prediction to the output file."""
+        """Simply add the prediction to the video entrance."""
         self.sequences.append([pred_tracking])
 
     def write_submit(self):
         """Write final json file."""
-        # Fill sequence with all frame
-        self.out_json.append({"Sequence":self.sequences})
+        # Add all processed video
+        self.out_json.append(self.videos)
 
-        # Write file on local
+        # Write local file
         with open(self.ouput_file_name, 'w+') as output_json_file:
             json.dump(self.out_json, output_json_file, cls=NpEncoder)
 
         output_json_file.close()
         print("Submission file generated: {}".format(self.ouput_file_name))
+
+    def write_video(self, video_name):
+        """Add the video and frame to the output file"""
+        self.videos.append({str(video_name): self.sequences})
 
     def display_on_frame(self, frame, pred_tracking):
         """Display all filtered bboxs and annotations on frame."""
