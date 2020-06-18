@@ -1,8 +1,6 @@
-import glob
 import os
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import cv2
-import pickle
-import pdb
 import numpy as np
 from keras_retinanet import models
 from object_tracker import Tracker
