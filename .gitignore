@@ -1,0 +1,27 @@
+# Ignore subfolder of folder
+data/*/*
+data/*.zip
+data/*.tar.xz
+*.mp4
+
+# Notebooks
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Python
+*.pyc
+*.pyo
+
+# Source
+src/darknet/*
+src/tf2-yolov4/*
+src/signate_output.json
+
+# Model
+*.h5
+*.h5.frozen
+model/*
+
+# Yolo
+notebook/signate*
+data/yolo*
