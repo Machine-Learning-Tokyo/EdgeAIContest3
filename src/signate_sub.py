@@ -4,22 +4,7 @@ import numpy as np
 import os
 import cv2
 
-CLASSES = [
-    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-    'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
-    'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse',
-    'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
-    'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis',
-    'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-    'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass',
-    'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich',
-    'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake',
-    'chair', 'couch', 'potted plant', 'bed', 'dining table',
-    'toilet', 'tv', 'laptop', 'mouse', 'remote', 'keyboard',
-    'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
-    'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
-    'toothbrush'
-]
++CLASSES = [ 'Pedestrian', 'Car']
 
 class NpEncoder(json.JSONEncoder):
     # Issue when dumping the json: https://stackoverflow.com/questions/50916422/python-typeerror-object-of-type-int64-is-not-json-serializable/50916741
@@ -52,9 +37,10 @@ class signate_submission():
 
                 if label == "Pedestrian":
                     person_list.append({"id": _id, "box2d":bbox})
-
+                elif label == "Car":
+                     car_list.append({"id": _id, "box2d":bbox})
                 else:
-                    car_list.append({"id": _id, "box2d":bbox})
+                    print("Wrong label in add_frame_old")
 
         # add in the frame (if not empty)
         current_frame = {}
