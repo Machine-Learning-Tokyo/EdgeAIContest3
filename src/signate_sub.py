@@ -5,7 +5,7 @@ import os
 import cv2
 import sys
 
-+CLASSES = [ 'Pedestrian', 'Car']
+CLASSES = [ 'Pedestrian', 'Car']
 
 class NpEncoder(json.JSONEncoder):
     # Issue when dumping the json: https://stackoverflow.com/questions/50916422/python-typeerror-object-of-type-int64-is-not-json-serializable/50916741
