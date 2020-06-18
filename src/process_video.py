@@ -2,15 +2,16 @@
 # run with RETINANET: python process_video.py -v ../data/train_videos/train_00.mp4 -m retinanet -w ../model/resnet50_sub1.h5.frozen
 # or with YOLOV4 python process_video.py -v ../data/train_videos/train_00.mp4
 
-from yolotf_wrapper import yolov4_inference
 from retinanet_wrapper import retinanet_inference
 import signate_sub
 from object_tracker import Tracker
 
 import cv2
+import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse, time
+
 
 def main():
     # Get parameters
@@ -54,8 +55,8 @@ def main():
         try:
             # Detection
             boxes, scores, classes_pred, pred_detection = model.detect(frame)
-            print("\nInference time: {} ms.".format(round(1/(time.time()-prev_time), 3)))
-            print("pred_detection: {}".format(pred_detection))
+            # print("\nInference time: {} ms.".format(round(1/(time.time()-prev_time), 3)))
+            # print("pred_detection: {}".format(pred_detection))
 
             # Tracking
             pred_tracking = tracker.assign_ids(pred_detection, frame)
@@ -88,6 +89,7 @@ def main():
 
     # Generate Submittion
     signate_output.write_submit()
+
 
 if __name__ == "__main__":
     main()

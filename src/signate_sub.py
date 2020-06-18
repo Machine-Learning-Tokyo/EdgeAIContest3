@@ -5,7 +5,8 @@ import os
 import cv2
 import sys
 
-CLASSES = [ 'Pedestrian', 'Car']
+CLASSES = ['Pedestrian', 'Car']
+
 
 class NpEncoder(json.JSONEncoder):
     # Issue when dumping the json: https://stackoverflow.com/questions/50916422/python-typeerror-object-of-type-int64-is-not-json-serializable/50916741
@@ -19,13 +20,13 @@ class NpEncoder(json.JSONEncoder):
         else:
             return super(NpEncoder, self).default(obj)
 
+
 class signate_submission():
     def __init__(self, classe_list, file_name="prediction.json"):
         self.ouput_file_name = file_name
         self.sequences = []
         self.videos = []
         self.out_json = {}
-
         self.filter = ["Pedestrian", "Car"]
 
     def add_frame_old(self, bbox, classes_pred, scores, ids):
@@ -37,9 +38,9 @@ class signate_submission():
                 label = CLASSES[cl]
 
                 if label == "Pedestrian":
-                    person_list.append({"id": _id, "box2d":bbox})
+                    person_list.append({"id": _id, "box2d": bbox})
                 elif label == "Car":
-                     car_list.append({"id": _id, "box2d":bbox})
+                     car_list.append({"id": _id, "box2d": bbox})
                 else:
                     print("Wrong label in add_frame_old")
 

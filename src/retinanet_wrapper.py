@@ -1,6 +1,6 @@
 # yolov4-tf2 wrapper
 import tensorflow as tf
-
+import pdb
 ##################
 ## Needed for my current setup
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -18,34 +18,27 @@ sys.path.insert(0, '../src/')
 # import keras_retinanet
 from keras_retinanet import models
 from keras_retinanet.utils.image import read_image_bgr, preprocess_image, resize_image
-from keras_retinanet.utils.visualization import draw_box, draw_caption
-from keras_retinanet.utils.colors import label_color
-from keras_retinanet.utils.gpu import setup_gpu
-
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 # Default classes:
 labels_to_names = {0: 'Pedestrian', 1: 'Car'}
 
+
 class retinanet_inference():
-    def __init__(self, weight_path, threshold=0.5, classe_filter=['Pedestrian','Car']):
+    def __init__(self, weight_path, threshold=0.5, classe_filter=['Pedestrian', 'Car']):
         # Model
         self.weight_path = weight_path
         self.threshold = threshold
         self.model = None
         self.classe_filter = classe_filter
+
         self.classes_list = self.CLASSES = labels_to_names
         self.label_limit = 1
 
-        # Image setting
-        self.height_in, self.width_in = (640, 960)
-        self.height_out, self.width_out= (1936, 1216)
-
         # Load model
         self.load_model()
-        self.model.summary()
+        # self.model.summary()
 
     def load_model(self):
         print("Loading model: {}".format(self.weight_path))
@@ -84,8 +77,8 @@ class retinanet_inference():
     def detect(self, cv2_image):
         """Run predict on the image after preprocessing."""
         # Convert image for network
-        img_inf = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
-        img_inf = preprocess_image(img_inf)
+        # img_inf = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
+        img_inf = preprocess_image(cv2_image)
         img_inf, scale = resize_image(img_inf)
 
         # Run inference
@@ -114,7 +107,6 @@ class retinanet_inference():
 
                 if label == "Pedestrian":
                     person_list.append({"box2d":bbox})
-
                 else:
                     car_list.append({"box2d":bbox})
 
