@@ -3,6 +3,7 @@ import json
 import numpy as np
 import os
 import cv2
+import sys
 
 +CLASSES = [ 'Pedestrian', 'Car']
 
@@ -23,7 +24,7 @@ class signate_submission():
         self.ouput_file_name = file_name
         self.sequences = []
         self.videos = []
-        self.out_json = []
+        self.out_json = {}
 
         self.filter = ["Pedestrian", "Car"]
 
@@ -53,23 +54,19 @@ class signate_submission():
 
     def add_frame(self, pred_tracking):
         """Simply add the prediction to the video entrance."""
-        self.sequences.append([pred_tracking])
-
-    def write_submit(self):
-        """Write final json file."""
-        # Add all processed video
-        self.out_json.append(self.videos)
-
-        # Write local file
-        with open(self.ouput_file_name, 'w+') as output_json_file:
-            json.dump(self.out_json, output_json_file, cls=NpEncoder)
-
-        output_json_file.close()
-        print("Submission file generated: {}".format(self.ouput_file_name))
+        self.sequences.append(pred_tracking)
 
     def write_video(self, video_name):
         """Add the video and frame to the output file"""
-        self.videos.append({str(video_name): self.sequences})
+        self.out_json[str(video_name)]=self.sequences
+
+    def write_submit(self):
+        """Write final json file."""
+        with open(self.ouput_file_name, 'w+') as output_json_file:
+            json.dump(self.out_json, output_json_file, cls=NpEncoder)
+        output_json_file.close()
+
+        print("Submission file generated: {}".format(self.ouput_file_name))
 
     def display_on_frame(self, frame, pred_tracking):
         """Display all filtered bboxs and annotations on frame."""

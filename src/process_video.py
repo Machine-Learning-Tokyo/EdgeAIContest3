@@ -1,5 +1,5 @@
 # Process pipeline draft
-# run with RETINANET: python process_video.py -v ../data/train_videos/train_00.mp4 -m retinanet -w ../model/resnet50_csv_04.h5.frozen
+# run with RETINANET: python process_video.py -v ../data/train_videos/train_00.mp4 -m retinanet -w ../model/resnet50_sub1.h5.frozen
 # or with YOLOV4 python process_video.py -v ../data/train_videos/train_00.mp4
 
 from yolotf_wrapper import yolov4_inference
@@ -19,7 +19,9 @@ def main():
     parser.add_argument('-w', '--weights', type=str, help='Path to weight.h5', dest='weight_path', default='yolov4.h5')
     parser.add_argument('-m', '--model', type=str, help='Model version', dest='model_arch', default='yolov4')
     parser.add_argument('-d', '--display', help='display frame', dest='display', action='store_const', const=True)
+    parser.add_argument('-o', '--output', help='video output', dest='video_out', action='store_const', const=True)
     parser.set_defaults(display=False)
+    parser.set_defaults(video_out=False)
     args = parser.parse_args()
 
     # Init model
@@ -35,11 +37,11 @@ def main():
     signate_output = signate_sub.signate_submission(model.classes_list)
 
     # Load video
-    video_name = "test_00.mp4"
     cap = cv2.VideoCapture(args.video_input)
     w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 15.0, (int(w), int(h)))
+    if args.video_out:
+        out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 15.0, (int(w), int(h)))
 
     # Init Tracker
     tracker = Tracker((w, h))
@@ -69,18 +71,20 @@ def main():
                 cv2.waitKey(3)
 
             # Write output video
-            out.write(frame)
+            if args.video_out:
+                out.write(frame)
 
         except Exception as e:
             print("Unable to process frame: {}".format(e))
 
     # Write video prediction to output file
-    signate_output.write_video(video_name)
+    signate_output.write_video("train_00.mp4")
 
     # Save output
     print("Saving video output")
     cap.release()
-    out.release()
+    if args.video_out:
+        out.release()
 
     # Generate Submittion
     signate_output.write_submit()

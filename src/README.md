@@ -2,10 +2,10 @@
 
 **TODO:**
 
-- Tracking integration
-- Uniform prediction
-- Retinanet wrapper
-- Check submission format
+- [ ] Check dependencies of signate_docker
+- [x] Retinanet wrapper
+- [x] Check submission format
+- [ ] Submission code integration (as signate)
 
 ## Content
 Compossed by 1 main process: ```process_video.py```, that takes care of loading the video, setting up the **detection_module**, the **submission_helper**, and **tracking_module**.
