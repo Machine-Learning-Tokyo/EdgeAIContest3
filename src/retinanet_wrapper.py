@@ -65,14 +65,14 @@ class retinanet_inference():
             if cl > self.label_limit:
                 continue
             
-            area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
-            if area <= 1024:
-                print("area = {}".format(area))
-                continue
-            
             if score > self.threshold:
                 label = self.CLASSES[cl]
                 bbox = list(map(int, bbox))
+                
+                area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                if area <= 1024:
+                    print("area = {}".format(area))
+                    continue
 
                 if label in self.classe_filter:
                     clean_bboxs.append(bbox)
