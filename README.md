@@ -43,3 +43,7 @@ Implementation based on [MOT paper](https://paperswithcode.com/paper/a-simple-ba
 
 
 ## Submission
+Run the following command to generate the sample_submit folder 
+```
+bash generateSampleSubmit.sh
+```

@@ -81,7 +81,7 @@ class ScoringService(object):
             # else:
             # prediction = {"Car": [{"id": 0, "box2d": [0, 0, frame.shape[1], frame.shape[0]]}],
             #                 "Pedestrian": [{"id": 0, "box2d": [0, 0, frame.shape[1], frame.shape[0]]}]}
-            
+
         cap.release()
 
         return {fname: predictions}
