@@ -65,7 +65,7 @@ class Tracker:
 
 
     # find the optimal matching between objects in the previous frame (+occluded objects in the past frames) and objects in the current frame
-    # using hungarian algorithm for maximam weighted matching
+    # using hungarian algorithm for maximum weighted matching
     def hungarian_match(self, preds1, preds2, cls='Car'):
         n1 = len(preds1) # number of objects in the previous frame
         n2 = len(preds2) # number of objects in the current frame
@@ -380,6 +380,8 @@ class Tracker:
                         a = [mv[0]-mv2[0], mv[1]-mv2[1]]
                         if abs(mv[0])>abs(a[0])*2 and abs(mv[1])>abs(a[1])*2:
                             mv = [mv[0]+a[0], mv[1]+a[1]]
+                        # take moving average to suppress outliers
+                        mv = [(mv2[0]+mv[0])/2, (mv2[1]+mv[1])/2]
 
                 # estimate scaling speed of each object and predict next size
                 scale = p['scale']
@@ -432,7 +434,9 @@ class Tracker:
                     # calculate how fast the size of each object got scaled
                     sx = (box2d[2]-box2d[0]+1) / (prev_box2d[2]-prev_box2d[0]+1)
                     sy = (box2d[3]-box2d[1]+1) / (prev_box2d[3]-prev_box2d[1]+1)
-                    scale = [sx, sy]
+
+                    # take sqrt to suppress outliers
+                    scale = [np.sqrt(sx), np.sqrt(sy)]
                 else:
                     mv = [0, 0]
                     scale = [1, 1]
@@ -482,8 +486,6 @@ if __name__ == '__main__':
 
     for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
         max_time = 0
-        if nv<16: continue
-        if nv==17: break
         with open(pred) as f:
             ground_truths = json.load(f)
         ground_truths = ground_truths['sequence']
