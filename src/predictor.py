@@ -87,10 +87,10 @@ class ScoringService(object):
             offset_y2_1 = int(hc + int(cls.h * cls.scales[0]))
             img_inf1 = img_inf0[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
 
-            offset_x1_2 = int(wc - int(cls.w * cls.scales[0]))
-            offset_y1_2 = int(hc - int(cls.h * cls.scales[0]))
-            offset_x2_2 = int(wc + int(cls.w * cls.scales[0]))
-            offset_y2_2 = int(hc + int(cls.h * cls.scales[0]))
+            offset_x1_2 = int(wc - int(cls.w * cls.scales[1]))
+            offset_y1_2 = int(hc - int(cls.h * cls.scales[1]))
+            offset_x2_2 = int(wc + int(cls.w * cls.scales[1]))
+            offset_y2_2 = int(hc + int(cls.h * cls.scales[1]))
             img_inf2 = img_inf0[offset_y1_2:offset_y2_2, offset_x1_2:offset_x2_2]
 
             img_inf0, scale0 = resize_image(img_inf0)
