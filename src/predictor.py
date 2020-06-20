@@ -39,7 +39,7 @@ class ScoringService(object):
             return False
 
     @classmethod
-    def non_max_suppression_fast(cls, boxes, overlapThresh=0.4):
+    def non_max_suppression_fast(cls, boxes, overlapThresh=0.5):
         if len(boxes) == 0:
             return []
         if boxes.dtype.kind == "i":
@@ -71,6 +71,12 @@ class ScoringService(object):
                                                    np.where(overlap > overlapThresh)[0])))
 
         return pick
+
+    @classmethod
+    def draw_bboxes(cls, bboxes, image):
+        for bbox in bboxes:
+            cv2.rectangle(image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0,0,255), 1)
+        return image
 
     @classmethod
     def model_inference(cls, frame):
@@ -118,7 +124,7 @@ class ScoringService(object):
                         y2_ = min(cls.h, y2 + height * cls.expansion)
                         bbox = [int(x1_), int(y1_), int(x2_), int(y2_)]
                     else:
-                        bbox = list(map(int, bbox_))
+                        bbox = [int(x1), int(y1), int(x2), int(y2)]
 
                     clean_bboxes_.append(bbox)
                     clean_classes_pred_.append(label_)
@@ -143,7 +149,7 @@ class ScoringService(object):
                         y2_ = min(cls.h, y2 + height * cls.expansion)
                         bbox = [int(x1_), int(y1_), int(x2_), int(y2_)]
                     else:
-                        bbox = list(map(int, bbox_))
+                        bbox = [int(x1), int(y1), int(x2), int(y2)]
                     clean_bboxes_.append(bbox)
                     clean_classes_pred_.append(label_)
                     clean_scores_.append(score_)
@@ -166,12 +172,15 @@ class ScoringService(object):
                         y2_ = min(cls.h, y2 + height * cls.expansion)
                         bbox = [int(x1_), int(y1_), int(x2_), int(y2_)]
                     else:
-                        bbox = list(map(int, bbox_))
+                        bbox = [int(x1), int(y1), int(x2), int(y2)]
 
                     clean_bboxes_.append(bbox)
                     clean_classes_pred_.append(label_)
                     clean_scores_.append(score_)
 
+            # pdb.set_trace()
+            # drawed = cls.draw_bboxes(clean_bboxes_, frame)
+            # cv2.imwrite('/ext/drawed.png', drawed)
             pick_inds = cls.non_max_suppression_fast(np.array(clean_bboxes_))
             clean_bboxes = list(clean_bboxes_[i] for i in pick_inds)
             clean_classes_pred = list(clean_classes_pred_[i] for i in pick_inds)
