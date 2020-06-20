@@ -4,6 +4,7 @@ import cv2
 import pickle
 from retinanet_wrapper import retinanet_inference
 from object_tracker import Tracker
+import time
 
 
 class ScoringService(object):
@@ -60,28 +61,52 @@ class ScoringService(object):
         fname = os.path.basename(input)
         i = 0
         while True:
+            start_time = time.time()
             i = i + 1
             ret, frame = cap.read()
-            print("inside loop ret = {}  i={}".format(ret, i))
             if not ret:
                 break
             try:
                 # Detection
-                boxes, scores, classes_pred, pred_detection = cls.model.detect(frame)
+                start_time_detection = time.time()
+                boxes, scores, classes_pred, pred_detection = cls.model.detect(
+                    frame)
+                end_time_detection = time.time()
+                print("[PERFORMANCE] Video {} Frame {} Detection_Time = {}".format(
+                    fname, i, end_time_detection - start_time_detection))
+
                 # Tracking
+                start_time_tracking = time.time()
                 pred_tracking = tracker.assign_ids(pred_detection, frame)
-                #print("Tracking: {}".format(pred_tracking))
+                end_time_tracking = time.time()
+                if "Car" in pred_tracking:
+                    CAR_COUNT = len(pred_tracking["Car"])
+                else:
+                    CAR_COUNT = 0
+
+                if "Pedestrian" in pred_tracking:
+                    PEDESTRIAN_COUNT = len(pred_tracking["Pedestrian"])
+                else:
+                    PEDESTRIAN_COUNT = 0
+
+                print("[PERFORMANCE] Video {} Frame {} Tracking_Time  = {} CAR_COUNT={} PEDESTRIAN_COUNT={}".format(
+                    fname, i, end_time_tracking - start_time_tracking,
+                    CAR_COUNT, PEDESTRIAN_COUNT))
+                print("Tracking: {}".format(pred_tracking))
                 predictions.append(pred_tracking)
 
             except Exception as e:
                 print("Unable to process frame: {}".format(e))
-
+            end_time = time.time()
+            print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
+                fname, i, end_time - start_time))
+            print("-----------------------------")
             # if cls.model is not None:
             #     prediction = cls.model.predict(frame)
             # else:
             # prediction = {"Car": [{"id": 0, "box2d": [0, 0, frame.shape[1], frame.shape[0]]}],
             #                 "Pedestrian": [{"id": 0, "box2d": [0, 0, frame.shape[1], frame.shape[0]]}]}
-            
+
         cap.release()
 
         return {fname: predictions}
