@@ -115,7 +115,7 @@ class ScoringService(object):
                 if cls.model is not None:
                     prediction = cls.model_inference(frame)
                     if prediction is None:
-                        prediction = {}
+                        prediction = prev_prediction
                     predictions.append(prediction)
                     prev_prediction = copy.copy(prediction)
                 else:
@@ -125,8 +125,8 @@ class ScoringService(object):
             except:
                 predictions.append(prev_prediction)
         cap.release()
-        if len(predictions) > ii:
-            predictions = predictions[:ii]
+        # if len(predictions) > ii:
+        #     predictions = predictions[:ii]
         end_time = time.time()
         print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
             fname, ii, end_time - start_time))

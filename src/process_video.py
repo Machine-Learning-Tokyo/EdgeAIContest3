@@ -67,7 +67,7 @@ def main():
 
             # Display on frame
             signate_output.display_on_frame(frame, pred_tracking)
-            i = i + 1
+
             if args.display:
                 cv2.imshow('Demo', frame)
                 cv2.waitKey(3)
