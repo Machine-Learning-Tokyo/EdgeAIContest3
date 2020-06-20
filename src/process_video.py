@@ -67,6 +67,7 @@ def main():
 
             # Display on frame
             signate_output.display_on_frame(frame, pred_tracking)
+            i = i + 1
             if args.display:
                 cv2.imshow('Demo', frame)
                 cv2.waitKey(3)
@@ -78,8 +79,11 @@ def main():
         except Exception as e:
             print("Unable to process frame: {}".format(e))
 
+
     # Write video prediction to output file
-    signate_output.write_video("train_00.mp4")
+    v_l = args.video_input.split('/')
+    video_file_name = v_l[len(v_l) - 1]
+    signate_output.write_video(video_file_name)
 
     # Save output
     print("Saving video output")

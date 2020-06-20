@@ -3,6 +3,7 @@ data/*/*
 data/*.zip
 data/*.tar.xz
 *.mp4
+sample_submit/*
 
 # Notebooks
 .ipynb_checkpoints
