@@ -1,15 +1,15 @@
-import glob
 import os
 import cv2
-import pickle
-from retinanet_wrapper import retinanet_inference
+import numpy as np
+from keras_retinanet import models
 from object_tracker import Tracker
+from keras_retinanet.utils.image import read_image_bgr, preprocess_image, resize_image
+import copy
 import time
-
 
 class ScoringService(object):
     @classmethod
-    def get_model(cls, model_path='../model'):
+    def get_model(cls, model_path='../model/resnet50_csv_01.h5.frozen'):
         """Get model method
  
         Args:
@@ -24,9 +24,55 @@ class ScoringService(object):
  
         """
         print("get_model called")
-        cls.model = retinanet_inference(
-            model_path + "/resnet50_csv_01.h5.frozen")
-        return True
+        try:
+            cls.threshold_pedestrian = 0.5
+            cls.threshold_car = 0.5
+            #cls.tracker = Tracker((1936, 1216))
+            cls.model = models.load_model(
+                '../model/resnet50_csv_01.h5.frozen', backbone_name='resnet50')
+            return True
+        except:
+            return False
+
+    @classmethod
+    def model_inference(cls, frame):
+        print("model_inference called")
+        try:
+            # detection
+            start_time_detection = time.time()
+            img_inf = preprocess_image(frame)
+            img_inf, scale = resize_image(img_inf)
+            boxes, scores, labels = cls.model.predict_on_batch(
+                np.expand_dims(img_inf, axis=0))
+            boxes /= scale
+
+            clean_bboxes, clean_classes_pred, clean_scores = [], [], []
+            for bbox, score, label in zip(boxes[0], scores[0], labels[0]):
+                if (label == 0 and score >= cls.threshold_pedestrian) or (label == 1 and score >= cls.threshold_car):
+                    bbox = list(map(int, bbox))
+
+                    clean_bboxes.append(bbox)
+                    clean_classes_pred.append(label)
+                    clean_scores.append(score)
+
+            pedestrian_list = []
+            car_list = []
+            for bbox, score, label in zip(clean_bboxes, clean_scores, clean_classes_pred):
+                if label == 0:  # Pedestrian
+                    pedestrian_list.append({"box2d": bbox})
+                else:  # Car
+                    car_list.append({"box2d": bbox})
+
+            current_frame = {"Car": car_list, "Pedestrian": pedestrian_list}
+            end_time_detection = time.time()
+
+
+            print("[PERFORMANCE] Detection_Time = {}".format(end_time_detection - start_time_detection))
+            pred_tracking = cls.tracker.assign_ids(current_frame, frame)
+
+            return pred_tracking
+        except:
+            return None
 
     @classmethod
     def predict(cls, input):
@@ -49,64 +95,47 @@ class ScoringService(object):
             - If you do not want to make any prediction in some frames,
               just write "prediction = {}" in the prediction of the frame in the sequence(in line 65 or line 67).
         """
-        print("predict called")
+        print("Predicting file {}".format(input))
+
         predictions = []
         cap = cv2.VideoCapture(input)
-        w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-
-        # Init Tracker
-        tracker = Tracker((w, h))
-
+        w, h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(
+            cv2.CAP_PROP_FRAME_HEIGHT)
+        cls.tracker = Tracker((w, h))
+        prev_prediction = {"Car": [{"id": 0, "box2d": [0, 0, w, h]}], "Pedestrian": [
+            {"id": 0, "box2d": [0, 0, w, h]}]}
         fname = os.path.basename(input)
-        i = 0
+        ii = 0
         while True:
             start_time = time.time()
-            i = i + 1
+            ii += 1
+            if (ii % 100 == 0) :
+                print("Frames processed : {}".format(ii))
             ret, frame = cap.read()
             if not ret:
                 break
             try:
-                # Detection
-                start_time_detection = time.time()
-                boxes, scores, classes_pred, pred_detection = cls.model.detect(
-                    frame)
-                end_time_detection = time.time()
-                print("[PERFORMANCE] Video {} Frame {} Detection_Time = {}".format(
-                    fname, i, end_time_detection - start_time_detection))
-
-                # Tracking
-                start_time_tracking = time.time()
-                pred_tracking = tracker.assign_ids(pred_detection, frame)
-                end_time_tracking = time.time()
-                if "Car" in pred_tracking:
-                    CAR_COUNT = len(pred_tracking["Car"])
+                if cls.model is not None:
+                    prediction = cls.model_inference(frame)
+                    if prediction is None:
+                        prediction = {}
+                    predictions.append(prediction)
+                    prev_prediction = copy.copy(prediction)
                 else:
-                    CAR_COUNT = 0
-
-                if "Pedestrian" in pred_tracking:
-                    PEDESTRIAN_COUNT = len(pred_tracking["Pedestrian"])
-                else:
-                    PEDESTRIAN_COUNT = 0
-
-                print("[PERFORMANCE] Video {} Frame {} Tracking_Time  = {} CAR_COUNT={} PEDESTRIAN_COUNT={}".format(
-                    fname, i, end_time_tracking - start_time_tracking,
-                    CAR_COUNT, PEDESTRIAN_COUNT))
-                #print("Tracking: {}".format(pred_tracking))
-                predictions.append(pred_tracking)
-
-            except Exception as e:
-                print("Unable to process frame: {}".format(e))
-            end_time = time.time()
-            print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
-                fname, i, end_time - start_time))
-            print("-----------------------------")
-            # if cls.model is not None:
-            #     prediction = cls.model.predict(frame)
-            # else:
-            # prediction = {"Car": [{"id": 0, "box2d": [0, 0, frame.shape[1], frame.shape[0]]}],
-            #                 "Pedestrian": [{"id": 0, "box2d": [0, 0, frame.shape[1], frame.shape[0]]}]}
-
+                    prediction = {"Car": [{"id": 0, "box2d": [0, 0, w, h]}], "Pedestrian": [
+                        {"id": 0, "box2d": [0, 0, w, h]}]}
+                    predictions.append(prediction)
+            except:
+                predictions.append(prev_prediction)
         cap.release()
-
+        if len(predictions) > ii:
+            predictions = predictions[:ii]
+        end_time = time.time()
+        print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
+            fname, ii, end_time - start_time))
+        print("-----------------------------")
+        #else:
+        #    diff = ii - len(predictions)
+        #    for i in range(diff):
+        #        predictions.append({})
         return {fname: predictions}

@@ -9,8 +9,9 @@ if ScoringService.get_model():
     for i in range(0, 25):
         start_time_train = time.time()
         train_file = "train_{:02d}".format(i)
+        print("Train_file = {}".format(train_file))
         preds_json = ScoringService.predict(
-            "/ext/signate_edge_ai/train_videos/{}.mp4".format(train_file))
+            "/Users/yoovraj.shinde/work/signate/train_videos/{}.mp4".format(train_file))
         with open('{}.preds.json'.format(train_file), 'w+') as output_json_file:
             json.dump(preds_json, output_json_file)
         end_time_train = time.time()
