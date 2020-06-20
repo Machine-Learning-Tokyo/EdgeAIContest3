@@ -17,6 +17,6 @@ cp -v src/main.py                           sample_submit/src/
 
 # copy model file
 mkdir -pv sample_submit/model
-cp -v model/resnet50_csv_01.h5.frozen sample_submit/model/
+cp -v /ext/signate_edge_ai/model/resnet50_csv_01.h5.frozen sample_submit/model/
 
 zip -q -r sample_submit.zip sample_submit
