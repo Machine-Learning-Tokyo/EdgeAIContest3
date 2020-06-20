@@ -4,7 +4,7 @@ import cv2
 import pickle
 from retinanet_wrapper import retinanet_inference
 from object_tracker import Tracker
-
+import time
 
 class ScoringService(object):
     @classmethod
@@ -60,22 +60,35 @@ class ScoringService(object):
         fname = os.path.basename(input)
         i = 0
         while True:
+            start_time = time.time()
             i = i + 1
             ret, frame = cap.read()
-            print("inside loop ret = {}  i={}".format(ret, i))
             if not ret:
                 break
             try:
                 # Detection
+                start_time_detection = time.time()
                 boxes, scores, classes_pred, pred_detection = cls.model.detect(frame)
+                end_time_detection = time.time()
+                print("[PERFORMANCE] Video {} Frame {} Detection_Time = {}".format(
+                    fname, i, end_time_detection - start_time_detection))
+
                 # Tracking
+                start_time_tracking = time.time()
                 pred_tracking = tracker.assign_ids(pred_detection, frame)
+                end_time_tracking = time.time()
+                print("[PERFORMANCE] Video {} Frame {} Tracking_Time  = {}".format(
+                    fname, i, end_time_tracking - start_time_tracking))
                 #print("Tracking: {}".format(pred_tracking))
                 predictions.append(pred_tracking)
+                
 
             except Exception as e:
                 print("Unable to process frame: {}".format(e))
-
+            end_time = time.time()
+            print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
+                fname, i, end_time - start_time))
+            print("-----------------------------")
             # if cls.model is not None:
             #     prediction = cls.model.predict(frame)
             # else:
