@@ -45,5 +45,12 @@ Implementation based on [MOT paper](https://paperswithcode.com/paper/a-simple-ba
 ## Submission
 Run the following command to generate the sample_submit folder 
 ```
-bash generateSampleSubmit.sh
+bash generate_mlt_submission.sh
+```
+
+In order to test submission on paperspace instance run following
+```
+bash test_submit.sh
+cd sample_submit; pwd
+python src/main.py
 ```
