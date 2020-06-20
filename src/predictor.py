@@ -6,6 +6,7 @@ from retinanet_wrapper import retinanet_inference
 from object_tracker import Tracker
 import time
 
+
 class ScoringService(object):
     @classmethod
     def get_model(cls, model_path='../model'):
@@ -68,7 +69,8 @@ class ScoringService(object):
             try:
                 # Detection
                 start_time_detection = time.time()
-                boxes, scores, classes_pred, pred_detection = cls.model.detect(frame)
+                boxes, scores, classes_pred, pred_detection = cls.model.detect(
+                    frame)
                 end_time_detection = time.time()
                 print("[PERFORMANCE] Video {} Frame {} Detection_Time = {}".format(
                     fname, i, end_time_detection - start_time_detection))
@@ -77,11 +79,21 @@ class ScoringService(object):
                 start_time_tracking = time.time()
                 pred_tracking = tracker.assign_ids(pred_detection, frame)
                 end_time_tracking = time.time()
-                print("[PERFORMANCE] Video {} Frame {} Tracking_Time  = {}".format(
-                    fname, i, end_time_tracking - start_time_tracking))
+                if "Car" in pred_tracking:
+                    CAR_COUNT = len(pred_tracking["Car"])
+                else:
+                    CAR_COUNT = 0
+
+                if "Pedestrian" in pred_tracking:
+                    PEDESTRIAN_COUNT = len(pred_tracking["Pedestrian"])
+                else:
+                    PEDESTRIAN_COUNT = 0
+
+                print("[PERFORMANCE] Video {} Frame {} Tracking_Time  = {} CAR_COUNT={} PEDESTRIAN_COUNT={}".format(
+                    fname, i, end_time_tracking - start_time_tracking,
+                    CAR_COUNT, PEDESTRIAN_COUNT))
                 #print("Tracking: {}".format(pred_tracking))
                 predictions.append(pred_tracking)
-                
 
             except Exception as e:
                 print("Unable to process frame: {}".format(e))
