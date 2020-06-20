@@ -13,7 +13,7 @@ from statistics import mean
 
 class Tracker:
     def __init__(self, image_size, max_patterns=10000000, max_time=0.1):
-        self.init_predictions = {'Car': [], 'Pedestrian': []};
+        self.init_predictions = {'Car': [], 'Pedestrian': []}
         self.predictions = [self.init_predictions]; # past predictions in the format {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
         self.image_size = image_size # input frame resolution: (width, height)
         self.max_occ_frames = 24 # max number of frames for which the tracker keeps occluded objects
@@ -370,7 +370,10 @@ class Tracker:
 
                 # estimate speed (motion vector) of each object and predict next position
                 if len(self.predictions)>=2:
-                    last2_preds = self.predictions[-2][cls]
+                    if cls not in self.predictions[-2]:
+                        last2_preds = self.init_predictions[cls]
+                    else:
+                        last2_preds = self.predictions[-2][cls]
                     if p['id'] in map(lambda p2: p2['id'], last2_preds):
                         p2 = list(filter(lambda p2: p2['id']==p['id'], last2_preds))[0]
                         mv2 = p2['mv']
@@ -434,14 +437,14 @@ class Tracker:
                     mv = [0, 0]
                     scale = [1, 1]
                 bb = pred[cls][i]['box2d']
-                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': image[bb[1]:bb[3]+1, bb[0]:bb[2]+1, :]}
+                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': image[int(bb[1]):int(bb[3])+1, int(bb[0]):int(bb[2])+1, :]}
 
             # generate next prediction data
             for i in range(len(box_map)):
                 # discard too old occluded objects kept in the tracker
                 if box_map[i]==-1 and adjusted_preds[i]['occlusion']<self.max_occ_frames:
                     bb = adjusted_preds[i]['box2d']
-                    pred[cls].append({'box2d': bb, 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': image[bb[1]:bb[3]+1, bb[0]:bb[2]+1, :]})
+                    pred[cls].append({'box2d': bb, 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': image[int(bb[1]):int(bb[3])+1, int(bb[0]):int(bb[2])+1, :]})
 
         # keep object prediction information in the tracker
         self.predictions.append(pred)
