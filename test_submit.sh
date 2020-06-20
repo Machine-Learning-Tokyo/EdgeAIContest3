@@ -16,7 +16,7 @@ cp -v src/object_tracker.py                 sample_submit/src/
 cp -v src/process_video.py                  sample_submit/src/
 cp -v src/retinanet_wrapper.py              sample_submit/src/
 cp -v src/signate_sub.py                    sample_submit/src/
-cp -v src/stabilizer.py                     ample_submit/src/
+cp -v src/stabilizer.py                     sample_submit/src/
 cp -v src/main.py                           sample_submit/src/
 
 # copy model file
