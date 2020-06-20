@@ -11,3 +11,4 @@ Cython==0.29.18
 numpy==1.18.4
 Pillow==7.1.2
 progressbar2==3.51.3
+git+https://github.com/fizyr/keras-retinanet.git
