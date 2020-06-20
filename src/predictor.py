@@ -31,15 +31,14 @@ class ScoringService(object):
             cls.model = models.load_model(
                 '../model/resnet50_csv_01.h5.frozen', backbone_name='resnet50')
             return True
-        except:
+        except Exception as e:
+            print("Failed to load model {}".format(e))
             return False
 
     @classmethod
     def model_inference(cls, frame):
-        print("model_inference called")
         try:
             # detection
-            start_time_detection = time.time()
             img_inf = preprocess_image(frame)
             img_inf, scale = resize_image(img_inf)
             boxes, scores, labels = cls.model.predict_on_batch(
@@ -64,10 +63,8 @@ class ScoringService(object):
                     car_list.append({"box2d": bbox})
 
             current_frame = {"Car": car_list, "Pedestrian": pedestrian_list}
-            end_time_detection = time.time()
 
 
-            print("[PERFORMANCE] Detection_Time = {}".format(end_time_detection - start_time_detection))
             pred_tracking = cls.tracker.assign_ids(current_frame, frame)
 
             return pred_tracking
