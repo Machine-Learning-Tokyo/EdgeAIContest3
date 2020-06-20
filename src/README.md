@@ -2,10 +2,12 @@
 
 **TODO:**
 
-- [ ] Check dependencies of signate_docker
+- [x] Check dependencies of signate_docker
 - [x] Retinanet wrapper
 - [x] Check submission format
-- [ ] Submission code integration (as signate)
+- [x] Submission code integration (as signate)
+- [ ] Submission with new tracker
+- [ ] Object detection tunning
 
 ## Content
 Compossed by 1 main process: ```process_video.py```, that takes care of loading the video, setting up the **detection_module**, the **submission_helper**, and **tracking_module**.
@@ -31,7 +33,7 @@ Stabilize the camera motion for two adjacent frames and transform the first fram
 from object_tracker import Tracker
 
 ...
-image_size = (1936, 1216)
+image_size = (1936, 1216, frame)
 
 tracker = Tracker(image_size)
 ...
