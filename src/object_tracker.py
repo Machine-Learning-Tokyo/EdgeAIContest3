@@ -34,7 +34,7 @@ class Tracker:
 
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
-        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.024, 1.09]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.03, 1.09]} # [a, b]: a is for box distance, b is for box size difference
         self.h_sim_weight = {'Car': 1.47, 'Pedestrian': 1.76} # cost for two boxes' image similarity
         self.h_occ_weight = {'Car': 0.91, 'Pedestrian': 1.5} # cost to detect a object in the previous frame as occluded (need better costs!!)
         self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
@@ -80,27 +80,39 @@ class Tracker:
         best_box_map = []
         min_cost = 1e16
         for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
+            prev_min_cost = min_cost
             n_match = n1 - n_occ
             if n_match>n2 or n_match<0:
                 continue
             n_frame_in = n2-n_match
-            tcosts = copy.deepcopy(match_costs)
-            # frame_in_costs = []
-            # for i in range(n2)# :
-                # x1, y1, x2, y2 = preds2[i]['box2d']
-                # cx = (x1+x2) / 2
-                # cy = (y1+y2) / 2
-                # dx = min(cx, self.image_size[0]-cx) / self.image_size[0]
-                # dy = min(cy, self.image_size[1]-cy) / self.image_size[1]
-                # frame_in_costs.append((dx+dy))# * self.h_frame_in_weight[cls])
-                # print(frame_in_costs)
+            fcosts = [c[:] for c in match_costs]
             for i in range(n_frame_in):
-                tcosts.append([self.h_frame_in_weight[cls]]*n2)
+                fcosts.append([self.h_frame_in_weight[cls]]*n2)
             for i in range(n_occ):
-                for j in range(len(tcosts)):
-                    tcosts[j].append(self.h_occ_weight[cls])
-            fcosts = copy.deepcopy(tcosts)
-            tcosts = np.array(tcosts)
+                for j in range(len(fcosts)):
+                    if j<n1:
+                        p1 = preds1[j]
+                        # decrease occlusion cost for a previously occluded object if it's covered by non-occluded objects
+                        if p1['occlusion']>0:
+                            bb1 = p1['box2d']
+                            flags = np.zeros((bb1[3]-bb1[1]+1, bb1[2]-bb1[0]+1), np.bool)
+                            for k in range(n1):
+                                if k!=j:
+                                    p2 = preds1[k]
+                                    if p2['occlusion']==0:
+                                        bb2 = p2['box2d']
+                                        x1 = max(bb1[0], bb2[0]) - bb1[0]
+                                        y1 = max(bb1[1], bb2[1]) - bb1[1]
+                                        x2 = min(bb1[2], bb2[2]) - bb1[0]
+                                        y2 = min(bb1[3], bb2[3]) - bb1[1]
+                                        flags[y1:y2, x1:x2] = True
+                            occ_rate = np.count_nonzero(flags) / (flags.shape[0]*flags.shape[1])
+                            fcosts[j].append(self.h_occ_weight[cls]*(1-occ_rate))
+                        else:
+                            fcosts[j].append(self.h_occ_weight[cls])
+                    else:
+                        fcosts[j].append(self.h_occ_weight[cls])
+            tcosts = np.array(fcosts)
             tcosts = (tcosts*100000).astype(np.int)
 
             # hungarian algorithm
@@ -112,22 +124,23 @@ class Tracker:
                 prev_marks = copy.deepcopy(marks)
                 while not (((marks==1).sum(axis=0)==1).all() and ((marks==1).sum(axis=1)==1).all()):
                     marks = np.zeros_like(tcosts)
-                    prev_tcosts = copy.deepcopy(tcosts)
+                    prev_tcosts = tcosts.copy()
 
                     # step2
                     while True:
                         while True:
                             updated1 = False
+                            zero_costs = tcosts==0
                             for i in range(tcosts.shape[0]):
-                                if np.count_nonzero(np.logical_and(tcosts[i]==0, marks[i]==0))==1 and (marks[i]!=1).all():
-                                    idx = np.where(np.logical_and(tcosts[i]==0, marks[i]==0))[0][0]
+                                if (marks[i]!=1).all() and np.count_nonzero(np.logical_and(zero_costs[i], marks[i]==0))==1:
+                                    idx = np.where(np.logical_and(zero_costs[i], marks[i]==0))[0][0]
                                     marks[:, idx][tcosts[:, idx]==0] = -1
                                     marks[i, :][tcosts[i, :]==0] = -1
                                     marks[i, idx] = 1
                                     updated1 = True
                             for i in range(tcosts.shape[1]):
-                                if np.count_nonzero(np.logical_and(tcosts[:, i]==0, marks[:, i]==0))==1 and (marks[:, i]!=1).all():
-                                    idx = np.where(np.logical_and(tcosts[:, i]==0, marks[:, i]==0))[0][0]
+                                if (marks[:, i]!=1).all() and np.count_nonzero(np.logical_and(zero_costs[:, i], marks[:, i]==0))==1:
+                                    idx = np.where(np.logical_and(zero_costs[:, i], marks[:, i]==0))[0][0]
                                     marks[idx, :][tcosts[idx, :]==0] = -1
                                     marks[:, i][tcosts[:, i]==0] = -1
                                     marks[idx, i] = 1
@@ -135,27 +148,23 @@ class Tracker:
                             if not updated1:
                                 break
                         updated2 = False
-                        rows = [(i, np.count_nonzero(np.logical_and(tcosts[i, :]==0, marks[i, :]==0))) for i in range(tcosts.shape[0])] + [(-1, 1e16)]
-                        rows = sorted(filter(lambda r: r[1]>0, rows), key=lambda r: r[1])
-                        cols = [(i, np.count_nonzero(np.logical_and(tcosts[:, i]==0, marks[:, i]==0))) for i in range(tcosts.shape[1])] + [(-1, 1e16)]
-                        cols = sorted(filter(lambda c: c[1]>0, cols), key=lambda c: c[1])
-                        m = min(rows[0][1], cols[0][1])
-                        rows = list(filter(lambda r: r[1]==m, rows))
-                        cols = list(filter(lambda c: c[1]==m, cols))
-                        if (rows+cols)[0][1]<1e16:
+                        unmarked_zeros = np.logical_and(zero_costs, marks==0)
+                        nr_unmarked_zeros = np.count_nonzero(unmarked_zeros, axis=1)
+                        indices = np.where(nr_unmarked_zeros>0)[0]
+                        rows = indices[nr_unmarked_zeros[indices]==nr_unmarked_zeros[indices].min()] if indices.shape[0]>0 else np.array([])
+                        nc_unmarked_zeros = np.count_nonzero(unmarked_zeros, axis=0)
+                        indices = np.where(nc_unmarked_zeros>0)[0]
+                        cols = indices[nc_unmarked_zeros[indices]==nc_unmarked_zeros[indices].min()] if indices.shape[0]>0 else np.array([])
+                        if rows.shape[0]>0 or cols.shape[0]>0:
                             cands = []
                             for r in rows:
-                                if r[1]==1e16:
-                                    continue
-                                rcs = np.where(np.logical_and(tcosts[r[0], :]==0, marks[r[0], :]==0))[0]
+                                rcs = np.where(np.logical_and(zero_costs[r, :], marks[r, :]==0))[0]
                                 for rc in rcs:
-                                    cands.append((r[0], rc, np.count_nonzero(np.logical_and(tcosts[:, rc]==0, marks[:, rc]==0))))
+                                    cands.append((r, rc, nc_unmarked_zeros[rc]))
                             for c in cols:
-                                if c[1]==1e16:
-                                    continue
-                                crs = np.where(np.logical_and(tcosts[:, c[0]]==0, marks[:, c[0]]==0))[0]
+                                crs = np.where(np.logical_and(zero_costs[:, c], marks[:, c]==0))[0]
                                 for cr in crs:
-                                    cands.append((cr, c[0], np.count_nonzero(np.logical_and(tcosts[cr, :]==0, marks[cr, :]==0))))
+                                    cands.append((cr, c, nr_unmarked_zeros[cr]))
                             cands.sort(key=lambda cand: cand[2])
                             r, c = cands[0][0], cands[0][1]
                             marks[r, :][tcosts[r, :]==0] = -1
@@ -166,27 +175,27 @@ class Tracker:
                             break
 
                     # step3
-                    row_flags = np.zeros(tcosts.shape[0])
-                    col_flags = np.zeros(tcosts.shape[1])
+                    row_flags = np.zeros(tcosts.shape[0], np.bool)
+                    col_flags = np.zeros(tcosts.shape[1], np.bool)
                     row_queue = Queue()
                     col_queue = Queue()
                     for i in range(tcosts.shape[0]):
                         if np.count_nonzero(marks[i]==1)==0:
                             row_queue.put(i)
-                            row_flags[i] = 1
+                            row_flags[i] = True
                     while not (row_queue.empty() and col_queue.empty()):
                         while not row_queue.empty():
                             row = row_queue.get()
-                            cols = np.where(np.logical_and(marks[row, :]==-1, col_flags==0))[0]
+                            cols = np.where(np.logical_and(marks[row, :]==-1, np.logical_not(col_flags)))[0]
                             for col in cols:
                                 col_queue.put(col)
-                                col_flags[col] = 1
+                                col_flags[col] = True
                         while not col_queue.empty():
                             col = col_queue.get()
-                            rows = np.where(np.logical_and(marks[:, col]==1, row_flags==0))[0]
+                            rows = np.where(np.logical_and(marks[:, col]==1, np.logical_not(row_flags)))[0]
                             for row in rows:
                                 row_queue.put(row)
-                                row_flags[row] = 1
+                                row_flags[row] = True
 
                     # step4
                     if len(tcosts[row_flags==1])>0:
@@ -198,14 +207,14 @@ class Tracker:
                     else:
                         mask_min = 0
                     if len(tcosts[row_flags==1])>0:
-                        mask = np.array([[r==1 and c==0 for c in col_flags] for r in row_flags], np.bool)
+                        mask = np.logical_and(np.tile(row_flags[:, np.newaxis], [1, col_flags.shape[0]]), np.tile(np.logical_not(col_flags), [row_flags.shape[0], 1]))
                         tcosts[mask] -= mask_min
                     if len(tcosts[row_flags==0])>0:
-                        mask = np.array([[r==0 and c==1 for c in col_flags] for r in row_flags], np.bool)
+                        mask = np.logical_and(np.tile(np.logical_not(row_flags)[:, np.newaxis], [1, col_flags.shape[0]]), np.tile(col_flags, [row_flags.shape[0], 1]))
                         tcosts[mask] += mask_min
                     if (prev_tcosts==tcosts).all() and (prev_marks==marks).all():
                         break
-                    prev_marks = copy.deepcopy(marks)
+                    prev_marks = marks.copy()
 
             # create ID mapping to return, using hungarian matching result
             box_map = []
@@ -338,7 +347,6 @@ class Tracker:
         return best_box_map, min_cost
 
 
-
     def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2]}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2]}]}
         pred = copy.deepcopy(pred)
         for cls, boxes in pred.items():
@@ -432,11 +440,12 @@ class Tracker:
                     mv = [cnt[0]-prev_cnt[0], cnt[1]-prev_cnt[1]]
 
                     # calculate how fast the size of each object got scaled
-                    sx = (box2d[2]-box2d[0]+1) / (prev_box2d[2]-prev_box2d[0]+1)
-                    sy = (box2d[3]-box2d[1]+1) / (prev_box2d[3]-prev_box2d[1]+1)
+                    # sx = (box2d[2]-box2d[0]+1) / (prev_box2d[2]-prev_box2d[0]+1)
+                    # sy = (box2d[3]-box2d[1]+1) / (prev_box2d[3]-prev_box2d[1]+1)
 
                     # take sqrt to suppress outliers
-                    scale = [np.sqrt(sx), np.sqrt(sy)]
+                    # scale = [np.sqrt(np.sqrt(sx)), np.sqrt(np.sqrt(sy))]
+                    scale = [1, 1]
                 else:
                     mv = [0, 0]
                     scale = [1, 1]
@@ -483,6 +492,8 @@ if __name__ == '__main__':
 
     if not os.path.exists('debug'):
         os.mkdir('debug')
+
+    records = []
 
     for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
         max_time = 0
@@ -580,12 +591,22 @@ if __name__ == '__main__':
                 print(f'#Car={len(ground_truth["Car"])}, #Pedestrian={len(ground_truth["Pedestrian"])}, ', end='')
                 print(f'Time={t2-t1:.8f}({max_time:.8f}@max), Cost={tracker.total_cost}')
         print(f'Overall ({video_name})')
+        record = {'Name': video_name}
         for cls in sw.keys():
             video_total[cls] += 1
             video_error[cls] += sw[cls]/total[cls]
+            record[cls] = sw[cls]/total[cls]
             print(f'    {cls}: total={total[cls]}, sw={sw[cls]}, tp={tp[cls]}, err={sw[cls]/total[cls]:.8f}')
+        record['Avg'] = (sw['Car']/total['Car']+sw['Pedestrian']/total['Pedestrian']) / 2
+        records.append(record)
         print(f'    All: err={(sw["Car"]/total["Car"]+sw["Pedestrian"]/total["Pedestrian"])/2:.8f}')
-    print(f'complete Result')
+    print(f'Complete Result:')
     print(f'    Car: {video_error["Car"]/video_total["Car"]:.8f}')
     print(f'    Pedestrian: {video_error["Pedestrian"]/video_total["Pedestrian"]:.8f}')
     print(f'    All: err={(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.8f}')
+    print()
+    print('Short Log:')
+    for record in records:
+        print(f'{record["Name"]}: {record["Car"]:.4f}(Car), {record["Pedestrian"]:.4f}(Pedestrian), {record["Avg"]:.4f}(Avg)')
+    print(f'Average      : {video_error["Car"]/video_total["Car"]:.4f}(Car), {video_error["Pedestrian"]/video_total["Pedestrian"]:.4f}(Pedestrian), {(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.4f}(Avg)')
+

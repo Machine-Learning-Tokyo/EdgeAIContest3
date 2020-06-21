@@ -7,7 +7,7 @@ from keras_retinanet.utils.image import read_image_bgr, preprocess_image, resize
 import copy
 import time
 import pdb
-
+from collections import defaultdict
 
 class ScoringService(object):
     @classmethod
@@ -255,8 +255,25 @@ class ScoringService(object):
             except:
                 predictions.append(prev_prediction)
         cap.release()
+        predictions = cls.filter_predictions(predictions)
         end_time = time.time()
         print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
             fname, ii, end_time - start_time))
         print("-----------------------------")
         return {fname: predictions}
+    
+    @classmethod
+    def filter_predictions(cls, data):
+        id_count = defaultdict(lambda: defaultdict(int))
+        for sequence in data:
+            for c in sequence:
+                ids = [ item['id'] for item in sequence[c] ]
+                for id in ids:
+                    id_count[c][id] = id_count[c][id] + 1
+
+
+        for sequence in data:
+            for c in sequence:
+                sequence[c] = list(filter(lambda i: id_count[c][i['id']] > 2, sequence[c]))
+
+        return data
