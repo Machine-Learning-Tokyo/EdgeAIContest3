@@ -80,27 +80,18 @@ class Tracker:
         best_box_map = []
         min_cost = 1e16
         for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
+            prev_min_cost = min_cost
             n_match = n1 - n_occ
             if n_match>n2 or n_match<0:
                 continue
             n_frame_in = n2-n_match
-            tcosts = copy.deepcopy(match_costs)
-            # frame_in_costs = []
-            # for i in range(n2)# :
-                # x1, y1, x2, y2 = preds2[i]['box2d']
-                # cx = (x1+x2) / 2
-                # cy = (y1+y2) / 2
-                # dx = min(cx, self.image_size[0]-cx) / self.image_size[0]
-                # dy = min(cy, self.image_size[1]-cy) / self.image_size[1]
-                # frame_in_costs.append((dx+dy))# * self.h_frame_in_weight[cls])
-                # print(frame_in_costs)
+            fcosts = [c[:] for c in match_costs]
             for i in range(n_frame_in):
-                tcosts.append([self.h_frame_in_weight[cls]]*n2)
+                fcosts.append([self.h_frame_in_weight[cls]]*n2)
             for i in range(n_occ):
-                for j in range(len(tcosts)):
-                    tcosts[j].append(self.h_occ_weight[cls])
-            fcosts = copy.deepcopy(tcosts)
-            tcosts = np.array(tcosts)
+                for j in range(len(fcosts)):
+                    fcosts[j].append(self.h_occ_weight[cls])
+            tcosts = np.array(fcosts)
             tcosts = (tcosts*100000).astype(np.int)
 
             # hungarian algorithm
@@ -112,22 +103,23 @@ class Tracker:
                 prev_marks = copy.deepcopy(marks)
                 while not (((marks==1).sum(axis=0)==1).all() and ((marks==1).sum(axis=1)==1).all()):
                     marks = np.zeros_like(tcosts)
-                    prev_tcosts = copy.deepcopy(tcosts)
+                    prev_tcosts = tcosts.copy()
 
                     # step2
                     while True:
                         while True:
                             updated1 = False
+                            zero_costs = tcosts==0
                             for i in range(tcosts.shape[0]):
-                                if np.count_nonzero(np.logical_and(tcosts[i]==0, marks[i]==0))==1 and (marks[i]!=1).all():
-                                    idx = np.where(np.logical_and(tcosts[i]==0, marks[i]==0))[0][0]
+                                if (marks[i]!=1).all() and np.count_nonzero(np.logical_and(zero_costs[i], marks[i]==0))==1:
+                                    idx = np.where(np.logical_and(zero_costs[i], marks[i]==0))[0][0]
                                     marks[:, idx][tcosts[:, idx]==0] = -1
                                     marks[i, :][tcosts[i, :]==0] = -1
                                     marks[i, idx] = 1
                                     updated1 = True
                             for i in range(tcosts.shape[1]):
-                                if np.count_nonzero(np.logical_and(tcosts[:, i]==0, marks[:, i]==0))==1 and (marks[:, i]!=1).all():
-                                    idx = np.where(np.logical_and(tcosts[:, i]==0, marks[:, i]==0))[0][0]
+                                if (marks[:, i]!=1).all() and np.count_nonzero(np.logical_and(zero_costs[:, i], marks[:, i]==0))==1:
+                                    idx = np.where(np.logical_and(zero_costs[:, i], marks[:, i]==0))[0][0]
                                     marks[idx, :][tcosts[idx, :]==0] = -1
                                     marks[:, i][tcosts[:, i]==0] = -1
                                     marks[idx, i] = 1
@@ -135,27 +127,23 @@ class Tracker:
                             if not updated1:
                                 break
                         updated2 = False
-                        rows = [(i, np.count_nonzero(np.logical_and(tcosts[i, :]==0, marks[i, :]==0))) for i in range(tcosts.shape[0])] + [(-1, 1e16)]
-                        rows = sorted(filter(lambda r: r[1]>0, rows), key=lambda r: r[1])
-                        cols = [(i, np.count_nonzero(np.logical_and(tcosts[:, i]==0, marks[:, i]==0))) for i in range(tcosts.shape[1])] + [(-1, 1e16)]
-                        cols = sorted(filter(lambda c: c[1]>0, cols), key=lambda c: c[1])
-                        m = min(rows[0][1], cols[0][1])
-                        rows = list(filter(lambda r: r[1]==m, rows))
-                        cols = list(filter(lambda c: c[1]==m, cols))
-                        if (rows+cols)[0][1]<1e16:
+                        unmarked_zeros = np.logical_and(zero_costs, marks==0)
+                        nr_unmarked_zeros = np.count_nonzero(unmarked_zeros, axis=1)
+                        indices = np.where(nr_unmarked_zeros>0)[0]
+                        rows = indices[nr_unmarked_zeros[indices]==nr_unmarked_zeros[indices].min()] if indices.shape[0]>0 else np.array([])
+                        nc_unmarked_zeros = np.count_nonzero(unmarked_zeros, axis=0)
+                        indices = np.where(nc_unmarked_zeros>0)[0]
+                        cols = indices[nc_unmarked_zeros[indices]==nc_unmarked_zeros[indices].min()] if indices.shape[0]>0 else np.array([])
+                        if rows.shape[0]>0 or cols.shape[0]>0:
                             cands = []
                             for r in rows:
-                                if r[1]==1e16:
-                                    continue
-                                rcs = np.where(np.logical_and(tcosts[r[0], :]==0, marks[r[0], :]==0))[0]
+                                rcs = np.where(np.logical_and(zero_costs[r, :], marks[r, :]==0))[0]
                                 for rc in rcs:
-                                    cands.append((r[0], rc, np.count_nonzero(np.logical_and(tcosts[:, rc]==0, marks[:, rc]==0))))
+                                    cands.append((r, rc, nc_unmarked_zeros[rc]))
                             for c in cols:
-                                if c[1]==1e16:
-                                    continue
-                                crs = np.where(np.logical_and(tcosts[:, c[0]]==0, marks[:, c[0]]==0))[0]
+                                crs = np.where(np.logical_and(zero_costs[:, c], marks[:, c]==0))[0]
                                 for cr in crs:
-                                    cands.append((cr, c[0], np.count_nonzero(np.logical_and(tcosts[cr, :]==0, marks[cr, :]==0))))
+                                    cands.append((cr, c, nr_unmarked_zeros[cr]))
                             cands.sort(key=lambda cand: cand[2])
                             r, c = cands[0][0], cands[0][1]
                             marks[r, :][tcosts[r, :]==0] = -1
@@ -166,27 +154,27 @@ class Tracker:
                             break
 
                     # step3
-                    row_flags = np.zeros(tcosts.shape[0])
-                    col_flags = np.zeros(tcosts.shape[1])
+                    row_flags = np.zeros(tcosts.shape[0], np.bool)
+                    col_flags = np.zeros(tcosts.shape[1], np.bool)
                     row_queue = Queue()
                     col_queue = Queue()
                     for i in range(tcosts.shape[0]):
                         if np.count_nonzero(marks[i]==1)==0:
                             row_queue.put(i)
-                            row_flags[i] = 1
+                            row_flags[i] = True
                     while not (row_queue.empty() and col_queue.empty()):
                         while not row_queue.empty():
                             row = row_queue.get()
-                            cols = np.where(np.logical_and(marks[row, :]==-1, col_flags==0))[0]
+                            cols = np.where(np.logical_and(marks[row, :]==-1, np.logical_not(col_flags)))[0]
                             for col in cols:
                                 col_queue.put(col)
-                                col_flags[col] = 1
+                                col_flags[col] = True
                         while not col_queue.empty():
                             col = col_queue.get()
-                            rows = np.where(np.logical_and(marks[:, col]==1, row_flags==0))[0]
+                            rows = np.where(np.logical_and(marks[:, col]==1, np.logical_not(row_flags)))[0]
                             for row in rows:
                                 row_queue.put(row)
-                                row_flags[row] = 1
+                                row_flags[row] = True
 
                     # step4
                     if len(tcosts[row_flags==1])>0:
@@ -198,14 +186,14 @@ class Tracker:
                     else:
                         mask_min = 0
                     if len(tcosts[row_flags==1])>0:
-                        mask = np.array([[r==1 and c==0 for c in col_flags] for r in row_flags], np.bool)
+                        mask = np.logical_and(np.tile(row_flags[:, np.newaxis], [1, col_flags.shape[0]]), np.tile(np.logical_not(col_flags), [row_flags.shape[0], 1]))
                         tcosts[mask] -= mask_min
                     if len(tcosts[row_flags==0])>0:
-                        mask = np.array([[r==0 and c==1 for c in col_flags] for r in row_flags], np.bool)
+                        mask = np.logical_and(np.tile(np.logical_not(row_flags)[:, np.newaxis], [1, col_flags.shape[0]]), np.tile(col_flags, [row_flags.shape[0], 1]))
                         tcosts[mask] += mask_min
                     if (prev_tcosts==tcosts).all() and (prev_marks==marks).all():
                         break
-                    prev_marks = copy.deepcopy(marks)
+                    prev_marks = marks.copy()
 
             # create ID mapping to return, using hungarian matching result
             box_map = []
@@ -336,7 +324,6 @@ class Tracker:
             min_cost = 0
 
         return best_box_map, min_cost
-
 
 
     def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2]}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2]}]}
