@@ -34,7 +34,7 @@ class Tracker:
 
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
-        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.024, 1.09]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.03, 1.09]} # [a, b]: a is for box distance, b is for box size difference
         self.h_sim_weight = {'Car': 1.47, 'Pedestrian': 1.76} # cost for two boxes' image similarity
         self.h_occ_weight = {'Car': 0.91, 'Pedestrian': 1.5} # cost to detect a object in the previous frame as occluded (need better costs!!)
         self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
@@ -432,11 +432,12 @@ class Tracker:
                     mv = [cnt[0]-prev_cnt[0], cnt[1]-prev_cnt[1]]
 
                     # calculate how fast the size of each object got scaled
-                    sx = (box2d[2]-box2d[0]+1) / (prev_box2d[2]-prev_box2d[0]+1)
-                    sy = (box2d[3]-box2d[1]+1) / (prev_box2d[3]-prev_box2d[1]+1)
+                    # sx = (box2d[2]-box2d[0]+1) / (prev_box2d[2]-prev_box2d[0]+1)
+                    # sy = (box2d[3]-box2d[1]+1) / (prev_box2d[3]-prev_box2d[1]+1)
 
                     # take sqrt to suppress outliers
-                    scale = [np.sqrt(sx), np.sqrt(sy)]
+                    # scale = [np.sqrt(np.sqrt(sx)), np.sqrt(np.sqrt(sy))]
+                    scale = [1, 1]
                 else:
                     mv = [0, 0]
                     scale = [1, 1]
@@ -483,6 +484,8 @@ if __name__ == '__main__':
 
     if not os.path.exists('debug'):
         os.mkdir('debug')
+
+    records = []
 
     for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
         max_time = 0
@@ -580,12 +583,22 @@ if __name__ == '__main__':
                 print(f'#Car={len(ground_truth["Car"])}, #Pedestrian={len(ground_truth["Pedestrian"])}, ', end='')
                 print(f'Time={t2-t1:.8f}({max_time:.8f}@max), Cost={tracker.total_cost}')
         print(f'Overall ({video_name})')
+        record = {'Name': video_name}
         for cls in sw.keys():
             video_total[cls] += 1
             video_error[cls] += sw[cls]/total[cls]
+            record[cls] = sw[cls]/total[cls]
             print(f'    {cls}: total={total[cls]}, sw={sw[cls]}, tp={tp[cls]}, err={sw[cls]/total[cls]:.8f}')
+        record['Avg'] = (sw['Car']/total['Car']+sw['Pedestrian']/total['Pedestrian']) / 2
+        records.append(record)
         print(f'    All: err={(sw["Car"]/total["Car"]+sw["Pedestrian"]/total["Pedestrian"])/2:.8f}')
-    print(f'complete Result')
+    print(f'Complete Result:')
     print(f'    Car: {video_error["Car"]/video_total["Car"]:.8f}')
     print(f'    Pedestrian: {video_error["Pedestrian"]/video_total["Pedestrian"]:.8f}')
     print(f'    All: err={(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.8f}')
+    print()
+    print('Short Log:')
+    for record in records:
+        print(f'{record["Name"]}: {record["Car"]:.4f}(Car), {record["Pedestrian"]:.4f}(Pedestrian), {record["Avg"]:.4f}(Avg)')
+    print(f'Average      : {video_error["Car"]/video_total["Car"]:.4f}(Car), {video_error["Pedestrian"]/video_total["Pedestrian"]:.4f}(Pedestrian), {(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.4f}(Avg)')
+
