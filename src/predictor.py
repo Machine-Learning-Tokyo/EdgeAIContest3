@@ -117,6 +117,8 @@ class ScoringService(object):
                     [x1, y1, x2, y2] = bbox_
                     width = x2 - x1
                     height = y2 - y1
+                    if width * height < 1024:
+                        continue
                     if width * height < 4000:
                         x1_ = max(0, x1 - width * cls.expansion)
                         y1_ = max(0, y1 - height * cls.expansion)
@@ -139,7 +141,7 @@ class ScoringService(object):
                     y2 += offset_y1_1
                     width = x2 - x1
                     height = y2 - y1
-                    if width * height <= 1024:
+                    if width * height < 1024:
                         continue
 
                     if width * height < 4000:
@@ -163,7 +165,7 @@ class ScoringService(object):
                     y2 += offset_y1_2
                     width = x2 - x1
                     height = y2 - y1
-                    if width * height <= 1024:
+                    if width * height < 1024:
                         continue
                     if width * height < 4000:
                         x1_ = max(0, x1 - width * cls.expansion)
