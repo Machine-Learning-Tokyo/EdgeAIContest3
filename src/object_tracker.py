@@ -90,7 +90,28 @@ class Tracker:
                 fcosts.append([self.h_frame_in_weight[cls]]*n2)
             for i in range(n_occ):
                 for j in range(len(fcosts)):
-                    fcosts[j].append(self.h_occ_weight[cls])
+                    if j<n1:
+                        p1 = preds1[j]
+                        # decrease occlusion cost for a previously occluded object if it's covered by non-occluded objects
+                        if p1['occlusion']>0:
+                            bb1 = p1['box2d']
+                            flags = np.zeros((bb1[3]-bb1[1]+1, bb1[2]-bb1[0]+1), np.bool)
+                            for k in range(n1):
+                                if k!=j:
+                                    p2 = preds1[k]
+                                    if p2['occlusion']==0:
+                                        bb2 = p2['box2d']
+                                        x1 = max(bb1[0], bb2[0]) - bb1[0]
+                                        y1 = max(bb1[1], bb2[1]) - bb1[1]
+                                        x2 = min(bb1[2], bb2[2]) - bb1[0]
+                                        y2 = min(bb1[3], bb2[3]) - bb1[1]
+                                        flags[y1:y2, x1:x2] = True
+                            occ_rate = np.count_nonzero(flags) / (flags.shape[0]*flags.shape[1])
+                            fcosts[j].append(self.h_occ_weight[cls]*(1-occ_rate))
+                        else:
+                            fcosts[j].append(self.h_occ_weight[cls])
+                    else:
+                        fcosts[j].append(self.h_occ_weight[cls])
             tcosts = np.array(fcosts)
             tcosts = (tcosts*100000).astype(np.int)
 
