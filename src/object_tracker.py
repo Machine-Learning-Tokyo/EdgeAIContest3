@@ -105,7 +105,7 @@ class Tracker:
                         # decrease occlusion cost for a previously occluded object if it's covered by non-occluded objects
                         if p1['occlusion']>0:
                             bb1 = p1['box2d']
-                            flags = np.zeros((bb1[3]-bb1[1]+1, bb1[2]-bb1[0]+1), np.bool)
+                            flags = np.zeros((int(bb1[3]-bb1[1]+1), int(bb1[2]-bb1[0]+1)), np.bool)
                             for k in range(n1):
                                 if k!=j:
                                     p2 = preds1[k]
@@ -115,7 +115,7 @@ class Tracker:
                                         y1 = max(bb1[1], bb2[1]) - bb1[1]
                                         x2 = min(bb1[2], bb2[2]) - bb1[0]
                                         y2 = min(bb1[3], bb2[3]) - bb1[1]
-                                        flags[y1:y2, x1:x2] = True
+                                        flags[int(y1):int(y2), int(x1):int(x2)] = True
                             occ_rate = np.count_nonzero(flags) / (flags.shape[0]*flags.shape[1])
                             fcosts[j].append(self.h_occ_weight[cls]*(1-occ_rate))
                         else:
@@ -380,7 +380,7 @@ class Tracker:
                 bb[2] = min(self.image_size[0]-1, bb[2])
                 bb[3] = min(self.image_size[1]-1, bb[3])
                 bb = [min(bb[0], bb[2]), min(bb[1], bb[3]), max(bb[0], bb[2]), max(bb[1], bb[3])]
-                box['image'] = image[bb[1]:bb[3]+1, bb[0]:bb[2]+1, :]
+                box['image'] = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
 
             for p in last_preds:
                 box2d = p['box2d']

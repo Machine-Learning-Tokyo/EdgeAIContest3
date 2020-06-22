@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from keras_retinanet import models
 from object_tracker import Tracker
-from keras_retinanet.utils.image import read_image_bgr, preprocess_image, resize_image
+from keras_retinanet.utils.image import read_image_bgr, preprocess_image, resize_image, adjust_brightness
 import copy
 import time
 import pdb
@@ -27,12 +27,12 @@ class ScoringService(object):
         """
         print("get_model called")
         try:
-            cls.threshold_pedestrian = 0.5
-            cls.threshold_car = 0.5
+            cls.threshold_pedestrian = 0.6
+            cls.threshold_car = 0.6
             cls.expansion = 0
-            cls.scales = [0.2, 0.4]
-            cls.model = models.load_model(
-                '../model/resnet50_csv_06.h5.frozen', backbone_name='resnet50')
+            cls.scales = [0.2]
+            cls.model = models.load_model('../model/resnet152_csv_21.h5.frozen', backbone_name='resnet152')
+            # cls.model = models.load_model('../model/resnet50_csv_06.h5.frozen', backbone_name='resnet50')
             return True
         except Exception as e:
             print("Failed to load model {}".format(e))
@@ -79,45 +79,75 @@ class ScoringService(object):
         return image
 
     @classmethod
-    def model_inference(cls, frame):
+    def model_inference(cls, frame, ii):
         try:
             # detection
             wc = cls.w // 2
             hc = cls.h // 2
 
-            img_inf0 = preprocess_image(frame)
-
             offset_x1_1 = int(wc - int(cls.w * cls.scales[0]))
             offset_y1_1 = int(hc - int(cls.h * cls.scales[0]))
             offset_x2_1 = int(wc + int(cls.w * cls.scales[0]))
             offset_y2_1 = int(hc + int(cls.h * cls.scales[0]))
-            img_inf1 = img_inf0[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
+            img_inf1 = frame[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
+            img_inf2 = frame[offset_y1_1:offset_y1_1+img_inf1.shape[0], :img_inf1.shape[1]]
+            x_offset_2 = 0
+            img_inf3 = frame[offset_y1_1:offset_y1_1+img_inf1.shape[0], -img_inf1.shape[1]:]
+            x_offset_3 = cls.w -img_inf3.shape[1]
 
-            offset_x1_2 = int(wc - int(cls.w * cls.scales[1]))
-            offset_y1_2 = int(hc - int(cls.h * cls.scales[1]))
-            offset_x2_2 = int(wc + int(cls.w * cls.scales[1]))
-            offset_y2_2 = int(hc + int(cls.h * cls.scales[1]))
-            img_inf2 = img_inf0[offset_y1_2:offset_y2_2, offset_x1_2:offset_x2_2]
-
+            # original image
+            img_inf0 = preprocess_image(frame)
             img_inf0, scale0 = resize_image(img_inf0)
+
+            # center crop
+            img_inf1 = preprocess_image(img_inf1)
             img_inf1, scale1 = resize_image(img_inf1)
+            img_inf1 = img_inf1[:img_inf0.shape[0], :img_inf0.shape[1]]
+
+            # left crop
+            img_inf2 = preprocess_image(img_inf2)
             img_inf2, scale2 = resize_image(img_inf2)
+            img_inf2 = img_inf2[:img_inf0.shape[0], :img_inf0.shape[1]]
+
+            # right crop
+            img_inf3 = preprocess_image(img_inf3)
+            img_inf3, scale3 = resize_image(img_inf3)
+            img_inf3 = img_inf3[:img_inf0.shape[0], :img_inf0.shape[1]]
+
+            # brightness change
+            img_inf4 = adjust_brightness(frame, -0.1)
+            img_inf4 = preprocess_image(img_inf4)
+            img_inf4, scale4 = resize_image(img_inf4)
+
+            # pdb.set_trace()
+            # cv2.imwrite('/ext/whole.png', img_inf0)
+            # cv2.imwrite('/ext/center.png', img_inf1)
+            # cv2.imwrite('/ext/left.png', img_inf2)
+            # cv2.imwrite('/ext/right.png', img_inf3)
+            # cv2.imwrite('/ext/bright.png', img_inf4)
 
             # boxes, scores, labels = cls.model.predict_on_batch(np.expand_dims(img_inf_batch, axis=0))
-            boxes, scores, labels = cls.model.predict_on_batch(np.array([img_inf0, img_inf1, img_inf2]))
+            # boxes, scores, labels = cls.model.predict_on_batch(np.array([img_inf0, img_inf1, img_inf2, img_inf3]))
+            boxes, scores, labels = cls.model.predict_on_batch(np.array([img_inf0, img_inf1, img_inf2,
+                                                                         img_inf3, img_inf4]))
 
-            boxes_0 = boxes[0] / scale0
-            boxes_1 = boxes[1] / scale1
-            boxes_2 = boxes[2] / scale2
+            boxes[0] = boxes[0] / scale0
+            boxes[1] = boxes[1] / scale1
+            boxes[2] = boxes[2] / scale2
+            boxes[3] = boxes[3] / scale3
+            boxes[4] = boxes[4] / scale4
 
             clean_bboxes_, clean_classes_pred_, clean_scores_ = [], [], []
-            for bbox_, score_, label_ in zip(boxes_0, scores[0], labels[0]):
+            for bbox_, score_, label_ in zip(boxes[0], scores[0], labels[0]):
+                if label_ == -1:
+                    break
                 if (label_ == 0 and score_ >= cls.threshold_pedestrian) or (label_ == 1 and score_ >= cls.threshold_car):
-
                     [x1, y1, x2, y2] = bbox_
                     width = x2 - x1
                     height = y2 - y1
-                    if width * height < 4000:
+                    if width * height < 1024:
+                        continue
+                    if width * height < 2000:
                         x1_ = max(0, x1 - width * cls.expansion)
                         y1_ = max(0, y1 - height * cls.expansion)
                         x2_ = min(cls.w, x2 + width * cls.expansion)
@@ -130,7 +160,9 @@ class ScoringService(object):
                     clean_classes_pred_.append(label_)
                     clean_scores_.append(score_)
 
-            for bbox_, score_, label_ in zip(boxes_1, scores[1], labels[1]):
+            for bbox_, score_, label_ in zip(boxes[1], scores[1], labels[1]):
+                if label_ == -1:
+                    break
                 if (label_ == 0 and score_ >= cls.threshold_pedestrian) or (label_ == 1 and score_ >= cls.threshold_car):
                     [x1, y1, x2, y2] = bbox_
                     x1 += offset_x1_1
@@ -139,10 +171,10 @@ class ScoringService(object):
                     y2 += offset_y1_1
                     width = x2 - x1
                     height = y2 - y1
-                    if width * height <= 1024:
+                    if width * height < 1024:
                         continue
 
-                    if width * height < 4000:
+                    if width * height < 2000:
                         x1_ = max(0, x1 - width * cls.expansion)
                         y1_ = max(0, y1 - height * cls.expansion)
                         x2_ = min(cls.w, x2 + width * cls.expansion)
@@ -154,18 +186,45 @@ class ScoringService(object):
                     clean_classes_pred_.append(label_)
                     clean_scores_.append(score_)
 
-            for bbox_, score_, label_ in zip(boxes_2, scores[2], labels[2]):
+            for bbox_, score_, label_ in zip(boxes[2], scores[2], labels[2]):
+                if label_ == -1:
+                    break
                 if (label_ == 0 and score_ >= cls.threshold_pedestrian) or (label_ == 1 and score_ >= cls.threshold_car):
                     [x1, y1, x2, y2] = bbox_
-                    x1 += offset_x1_2
-                    y1 += offset_y1_2
-                    x2 += offset_x1_2
-                    y2 += offset_y1_2
+                    y1 += offset_y1_1
+                    y2 += offset_y1_1
                     width = x2 - x1
                     height = y2 - y1
-                    if width * height <= 1024:
+                    if width * height < 1024:
                         continue
-                    if width * height < 4000:
+
+                    if width * height < 2000:
+                        x1_ = max(0, x1 - width * cls.expansion)
+                        y1_ = max(0, y1 - height * cls.expansion)
+                        x2_ = min(cls.w, x2 + width * cls.expansion)
+                        y2_ = min(cls.h, y2 + height * cls.expansion)
+                        bbox = [int(x1_), int(y1_), int(x2_), int(y2_)]
+                    else:
+                        bbox = [int(x1), int(y1), int(x2), int(y2)]
+                    clean_bboxes_.append(bbox)
+                    clean_classes_pred_.append(label_)
+                    clean_scores_.append(score_)
+
+            for bbox_, score_, label_ in zip(boxes[3], scores[3], labels[3]):
+                if label_ == -1:
+                    break
+                if (label_ == 0 and score_ >= cls.threshold_pedestrian) or (label_ == 1 and score_ >= cls.threshold_car):
+                    [x1, y1, x2, y2] = bbox_
+                    x1 += x_offset_3
+                    y1 += offset_y1_1
+                    x2 += x_offset_3
+                    y2 += offset_y1_1
+
+                    width = x2 - x1
+                    height = y2 - y1
+                    if width * height < 1024:
+                        continue
+                    if width * height < 2000:
                         x1_ = max(0, x1 - width * cls.expansion)
                         y1_ = max(0, y1 - height * cls.expansion)
                         x2_ = min(cls.w, x2 + width * cls.expansion)
@@ -178,13 +237,38 @@ class ScoringService(object):
                     clean_classes_pred_.append(label_)
                     clean_scores_.append(score_)
 
-            # pdb.set_trace()
-            # drawed = cls.draw_bboxes(clean_bboxes_, frame)
-            # cv2.imwrite('/ext/drawed.png', drawed)
+            for bbox_, score_, label_ in zip(boxes[4], scores[4], labels[4]):
+                if label_ == -1:
+                    break
+                if (label_ == 0 and score_ >= cls.threshold_pedestrian) or (label_ == 1 and score_ >= cls.threshold_car):
+                    [x1, y1, x2, y2] = bbox_
+
+                    width = x2 - x1
+                    height = y2 - y1
+                    if width * height < 1024:
+                        continue
+                    if width * height < 2000:
+                        x1_ = max(0, x1 - width * cls.expansion)
+                        y1_ = max(0, y1 - height * cls.expansion)
+                        x2_ = min(cls.w, x2 + width * cls.expansion)
+                        y2_ = min(cls.h, y2 + height * cls.expansion)
+                        bbox = [int(x1_), int(y1_), int(x2_), int(y2_)]
+                    else:
+                        bbox = [int(x1), int(y1), int(x2), int(y2)]
+
+                    clean_bboxes_.append(bbox)
+                    clean_classes_pred_.append(label_)
+                    clean_scores_.append(score_)
+
+            # if ii == 11:
+            #     pdb.set_trace()
+            # drawed1 = cls.draw_bboxes(clean_bboxes_, frame)
+            # cv2.imwrite('/ext/drawed.png', drawed1)
             pick_inds = cls.non_max_suppression_fast(np.array(clean_bboxes_))
             clean_bboxes = list(clean_bboxes_[i] for i in pick_inds)
             clean_classes_pred = list(clean_classes_pred_[i] for i in pick_inds)
             clean_scores = list(clean_scores_[i] for i in pick_inds)
+
             pedestrian_list = []
             car_list = []
             for bbox, score, label in zip(clean_bboxes, clean_scores, clean_classes_pred):
@@ -194,11 +278,18 @@ class ScoringService(object):
                     car_list.append({"box2d": bbox})
 
             current_frame = {"Car": car_list, "Pedestrian": pedestrian_list}
+            pause = False
+            # if ii == 104:
+            #     drawed2 = cls.draw_bboxes(clean_bboxes, frame)
+            #     cv2.imwrite('/ext/drawed2.png', drawed2)
+            #     pdb.set_trace()
+            #     pause = True
 
-            pred_tracking = cls.tracker.assign_ids(current_frame, frame)
+            pred_tracking = cls.tracker.assign_ids(current_frame, frame, pause)
 
             return pred_tracking
         except:
+            # pdb.set_trace()
             return None
 
     @classmethod
@@ -243,7 +334,7 @@ class ScoringService(object):
                 break
             try:
                 if cls.model is not None:
-                    prediction = cls.model_inference(frame)
+                    prediction = cls.model_inference(frame, ii)
                     if prediction is None:
                         prediction = prev_prediction
                     predictions.append(prediction)
