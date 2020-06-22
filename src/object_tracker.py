@@ -35,16 +35,17 @@ class Tracker:
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
         self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.03, 1.09]} # [a, b]: a is for box distance, b is for box size difference
-        self.h_sim_weight = {'Car': 1.47, 'Pedestrian': 1.76} # cost for two boxes' image similarity
+        self.h_sim_weight = {'Car': 1.37, 'Pedestrian': 1.41} # cost for two boxes' image similarity
         self.h_occ_weight = {'Car': 0.91, 'Pedestrian': 1.5} # cost to detect a object in the previous frame as occluded (need better costs!!)
         self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
 
 
-    def calculate_cost(self, box1, box2, hist1, hist2, cls='Car', match_type='full'):
+    def calculate_cost(self, box1, box2, hist1, hist2, hist_mask, cls='Car', match_type='full'):
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
+
         hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(3)]
         # hist_score = mean(hist_score)
         hist_score = min(hist_score)
@@ -72,11 +73,20 @@ class Tracker:
 
         # calculate the costs for each combination of objects between the previous frame and the current frame in advance
         match_costs = [[0]*n2 for _ in range(n1)]
-        hist1s = [[cv2.calcHist([cv2.resize(preds1[i]['image'], (64, 64), interpolation=cv2.INTER_CUBIC)], [c], None, [64], [0, 256]) for c in range(3)] for i in range(n1)]
-        hist2s = [[cv2.calcHist([cv2.resize(preds2[i]['image'], (64, 64), interpolation=cv2.INTER_CUBIC)], [c], None, [64], [0, 256]) for c in range(3)] for i in range(n2)]
+        hist_mask = None
+        if cls=='Pedestrian':
+            hist_size = 128
+            hist_mask = np.ones((hist_size, hist_size), np.uint8)
+            for y in range(hist_size//2):
+                hist_mask[y, :hist_size//8*3-y*3//4] = 0
+                hist_mask[y, hist_size//8*5+y*3//4:] = 0
+                hist_mask[hist_size//2+y, :y*3//4] = 0
+                hist_mask[hist_size//2+y, hist_size-y*3//4:] = 0
+        hist1s = [[cv2.calcHist([cv2.resize(preds1[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n1)]
+        hist2s = [[cv2.calcHist([cv2.resize(preds2[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n2)]
         for i in range(n1):
             for j in range(n2):
-                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls, match_type='hungarian')
+                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], hist_mask, cls, match_type='hungarian')
         best_box_map = []
         min_cost = 1e16
         for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
