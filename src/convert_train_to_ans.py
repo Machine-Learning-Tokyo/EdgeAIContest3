@@ -10,7 +10,6 @@ ans_converted = {}
 def check_dict(x):
     res = {}
     res2 = {}
-    # pdb.set_trace()
     try:
         if "Pedestrian" in x.keys():
             res['Pedestrian'] = x['Pedestrian']
@@ -40,10 +39,11 @@ def check_dict(x):
 
 
 def convert_to_ans_json(train_annotation_file):
-    file_name = train_annotation_file.replace('./train_annotations/', '').replace('.json', '')
+    # file_name = train_annotation_file.replace('./train_annotations/', '').replace('.json', '')
+    file_name = train_annotation_file.split('/')[-1].replace('.json', '')
     with open(train_annotation_file) as f:
         train_json = json.load(f)
-        filtered_list = [check_dict(x) for x in train_json['sequence']]
+        filtered_list = [check_dict(x) for x in train_json['sequence'][:100]]
         file_name = file_name + ".mp4"
         ans_converted[file_name] = filtered_list
 
