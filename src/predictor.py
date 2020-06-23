@@ -38,7 +38,9 @@ class ScoringService(object):
             cls.scales = [0.2]
             cls.small_object_area = 2000000
             # cls.model = models.load_model('../model/resnet152_csv_21.h5.frozen', backbone_name='resnet152')
-            cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')
+            cls.model = models.load_model('../model/resnet101_csv_10.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')
+            # cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')
+            # cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')
             # cls.model = models.load_model('../model/resnet50_csv_06.h5.frozen', backbone_name='resnet50')
             return True
         except Exception as e:
