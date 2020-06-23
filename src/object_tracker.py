@@ -383,35 +383,74 @@ class Tracker:
                 box['image'] = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
 
             for p in last_preds:
-                box2d = p['box2d']
-                mv = p['mv']
+                bb = p['box2d']
+                cnt = ((bb[0]+bb[2])/2, (bb[1]+bb[3])/2)
 
                 # estimate speed (motion vector) of each object and predict next position
-                if len(self.predictions)>=2:
-                    if cls not in self.predictions[-2]:
-                        last2_preds = self.init_predictions[cls]
+                # using up to 16 past frames
+                cnts = [cnt]
+                for i in range(2, 15):
+                    if len(self.predictions)>=i:
+                        past_pred = self.predictions[-i][cls]
+                        if p['id'] in map(lambda pp: pp['id'], past_pred):
+                            bb = list(filter(lambda pp: pp['id']==p['id'], past_pred))[0]['box2d']
+                            cnts.append(((bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
+                        else:
+                            break
                     else:
-                        last2_preds = self.predictions[-2][cls]
-                    if p['id'] in map(lambda p2: p2['id'], last2_preds):
-                        p2 = list(filter(lambda p2: p2['id']==p['id'], last2_preds))[0]
-                        mv2 = p2['mv']
-                        a = [mv[0]-mv2[0], mv[1]-mv2[1]]
-                        if abs(mv[0])>abs(a[0])*2 and abs(mv[1])>abs(a[1])*2:
-                            mv = [mv[0]+a[0], mv[1]+a[1]]
-                        # take moving average to suppress outliers
-                        mv = [(mv2[0]+mv[0])/2, (mv2[1]+mv[1])/2]
+                        break
+                if len(cnts)==1:
+                    w = bb[2] - bb[0]
+                    h = bb[3] - bb[1]
+                    mx = min(cnt[0], self.image_size[0]-cnt[0])
+                    my = min(cnt[1], self.image_size[1]-cnt[1])
+                    if mx<w and my<h:
+                        x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
+                        y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
+                        cnts.append((x, y))
+                    elif mx<w:
+                        x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
+                        y = cnt[1]
+                        cnts.append((x, y))
+                    elif my<h:
+                        x = cnt[0]
+                        y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
+                        cnts.append((x, y))
+                if len(cnts)>=2:
+                    cnts = cnts[::-1]
+                    # print(cls, cnts)
+                    if len(cnts)<=4:
+                        # linear regression
+                        xs = [cnt[0] for cnt in cnts]
+                        ys = [cnt[1] for cnt in cnts]
+                        n = len(cnts)
+                        xcs = np.polyfit(range(n), xs, 1)
+                        ycs = np.polyfit(range(n), ys, 1)
+                        x = xcs[0] * n + xcs[1]
+                        y = ycs[0] * n + ycs[1]
+                        cnt = [x, y]
+                    else:
+                        # quadratic regression
+                        xs = [cnt[0] for cnt in cnts]
+                        ys = [cnt[1] for cnt in cnts]
+                        n = len(cnts)
+                        xcs = np.polyfit(range(n), xs, 2)
+                        ycs = np.polyfit(range(n), ys, 2)
+                        x = xcs[0] * n**2 + xcs[1] * n + xcs[2]
+                        y = ycs[0] * n**2 + ycs[1] * n + ycs[2]
+                        cnt = [x, y]
 
                 # estimate scaling speed of each object and predict next size
                 scale = p['scale']
-                cnt = [(box2d[2]+box2d[0])/2, (box2d[3]+box2d[1])/2]
-                w = box2d[2]-box2d[0]+1
-                h = box2d[3]-box2d[1]+1
+                bb = p['box2d']
+                w = bb[2]-bb[0]+1
+                h = bb[3]-bb[1]+1
                 sw = w * scale[0]
                 sh = h * scale[1]
-                x1 = int(cnt[0] - sw/2 + mv[0])
-                x2 = int(cnt[0] + sw/2 + mv[0])
-                y1 = int(cnt[1] - sh/2 + mv[1])
-                y2 = int(cnt[1] + sh/2 + mv[1])
+                x1 = int(cnt[0] - sw/2)
+                x2 = int(cnt[0] + sw/2)
+                y1 = int(cnt[1] - sh/2)
+                y2 = int(cnt[1] + sh/2)
                 box2d = [max(0, x1), max(0, y1), min(self.image_size[0]-1, x2), min(self.image_size[1]-1, y2)]
                 box2d = [min(box2d[0], box2d[2]), min(box2d[1], box2d[3]), max(box2d[0], box2d[2]), max(box2d[1], box2d[3])]
 
