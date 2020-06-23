@@ -94,7 +94,7 @@ class ScoringService(object):
             wc = cls.w // 2
             hc = cls.h // 2
             # frame_darker = adjust_brightness(frame, -0.2)
-            # frame_brighter = adjust_brightness(frame, 0.2)
+            frame_brighter = adjust_brightness(frame, 0.2)
 
             offset_x1_1 = int(wc - int(cls.w * cls.scales[0]))
             offset_y1_1 = int(hc - int(cls.h * cls.scales[0]))
@@ -105,10 +105,10 @@ class ScoringService(object):
             # img_inf1 = frame[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
 
             # left (center) crop
-            img_inf2 = frame[offset_y1_1:offset_y2_1, :offset_x2_1-offset_x1_1]
+            img_inf2 = frame_brighter[offset_y1_1:offset_y2_1, :offset_x2_1-offset_x1_1]
 
             # right (center) crop
-            img_inf3 = frame[offset_y1_1:offset_y2_1, offset_x1_1 - offset_x2_1:]
+            img_inf3 = frame_brighter[offset_y1_1:offset_y2_1, offset_x1_1 - offset_x2_1:]
             x_offset_3 = cls.w -img_inf3.shape[1]
 
             """ original image """
@@ -334,15 +334,12 @@ class ScoringService(object):
         cls.w, cls.h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(
             cv2.CAP_PROP_FRAME_HEIGHT)
         cls.tracker = Tracker((cls.w, cls.h))
-        # prev_prediction = {"Car": [{"id": 0, "box2d": [0, 0, w, h]}], "Pedestrian": [{"id": 0, "box2d": [0, 0, w, h]}]}
         prev_prediction = {}
         fname = os.path.basename(input)
         ii = 0
         while True:
             start_time = time.time()
             ii += 1
-            # if ii >= 100:
-            #     break
             ret, frame = cap.read()
             if not ret:
                 break
@@ -350,19 +347,17 @@ class ScoringService(object):
                 if cls.model is not None:
                     prediction = cls.model_inference(frame, ii)
                     if prediction is None:
-                        continue
-                        # prediction = prev_prediction
+                        prediction = prev_prediction
                     predictions.append(prediction)
                     prev_prediction = copy.copy(prediction)
                 else:
-                    # prediction = {"Car": [{"id": 0, "box2d": [0, 0, w, h]}], "Pedestrian": [{"id": 0, "box2d": [0, 0, w, h]}]}
                     prediction = {}
                     predictions.append(prediction)
             except:
                 predictions.append(prev_prediction)
 
-            # if (ii % 10 == 0) :
-            #     print("Frames processed : {} ({})".format(ii, time.time() - start_time))
+            if (ii % 10 == 0) :
+                print("Frames processed : {} ({})".format(ii, time.time() - start_time))
         cap.release()
         predictions = cls.filter_predictions(predictions)
         end_time = time.time()
