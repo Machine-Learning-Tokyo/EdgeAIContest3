@@ -35,16 +35,17 @@ class Tracker:
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
         self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.03, 1.09]} # [a, b]: a is for box distance, b is for box size difference
-        self.h_sim_weight = {'Car': 1.47, 'Pedestrian': 1.76} # cost for two boxes' image similarity
+        self.h_sim_weight = {'Car': 1.37, 'Pedestrian': 1.41} # cost for two boxes' image similarity
         self.h_occ_weight = {'Car': 0.91, 'Pedestrian': 1.5} # cost to detect a object in the previous frame as occluded (need better costs!!)
         self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
 
 
-    def calculate_cost(self, box1, box2, hist1, hist2, cls='Car', match_type='full'):
+    def calculate_cost(self, box1, box2, hist1, hist2, hist_mask, cls='Car', match_type='full'):
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
+
         hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(3)]
         # hist_score = mean(hist_score)
         hist_score = min(hist_score)
@@ -72,11 +73,20 @@ class Tracker:
 
         # calculate the costs for each combination of objects between the previous frame and the current frame in advance
         match_costs = [[0]*n2 for _ in range(n1)]
-        hist1s = [[cv2.calcHist([cv2.resize(preds1[i]['image'], (64, 64), interpolation=cv2.INTER_CUBIC)], [c], None, [64], [0, 256]) for c in range(3)] for i in range(n1)]
-        hist2s = [[cv2.calcHist([cv2.resize(preds2[i]['image'], (64, 64), interpolation=cv2.INTER_CUBIC)], [c], None, [64], [0, 256]) for c in range(3)] for i in range(n2)]
+        hist_mask = None
+        if cls=='Pedestrian':
+            hist_size = 128
+            hist_mask = np.ones((hist_size, hist_size), np.uint8)
+            for y in range(hist_size//2):
+                hist_mask[y, :hist_size//8*3-y*3//4] = 0
+                hist_mask[y, hist_size//8*5+y*3//4:] = 0
+                hist_mask[hist_size//2+y, :y*3//4] = 0
+                hist_mask[hist_size//2+y, hist_size-y*3//4:] = 0
+        hist1s = [[cv2.calcHist([cv2.resize(preds1[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n1)]
+        hist2s = [[cv2.calcHist([cv2.resize(preds2[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n2)]
         for i in range(n1):
             for j in range(n2):
-                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls, match_type='hungarian')
+                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], hist_mask, cls, match_type='hungarian')
         best_box_map = []
         min_cost = 1e16
         for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
@@ -373,35 +383,74 @@ class Tracker:
                 box['image'] = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
 
             for p in last_preds:
-                box2d = p['box2d']
-                mv = p['mv']
+                bb = p['box2d']
+                cnt = ((bb[0]+bb[2])/2, (bb[1]+bb[3])/2)
 
                 # estimate speed (motion vector) of each object and predict next position
-                if len(self.predictions)>=2:
-                    if cls not in self.predictions[-2]:
-                        last2_preds = self.init_predictions[cls]
+                # using up to 16 past frames
+                cnts = [cnt]
+                for i in range(2, 15):
+                    if len(self.predictions)>=i:
+                        past_pred = self.predictions[-i][cls]
+                        if p['id'] in map(lambda pp: pp['id'], past_pred):
+                            bb = list(filter(lambda pp: pp['id']==p['id'], past_pred))[0]['box2d']
+                            cnts.append(((bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
+                        else:
+                            break
                     else:
-                        last2_preds = self.predictions[-2][cls]
-                    if p['id'] in map(lambda p2: p2['id'], last2_preds):
-                        p2 = list(filter(lambda p2: p2['id']==p['id'], last2_preds))[0]
-                        mv2 = p2['mv']
-                        a = [mv[0]-mv2[0], mv[1]-mv2[1]]
-                        if abs(mv[0])>abs(a[0])*2 and abs(mv[1])>abs(a[1])*2:
-                            mv = [mv[0]+a[0], mv[1]+a[1]]
-                        # take moving average to suppress outliers
-                        mv = [(mv2[0]+mv[0])/2, (mv2[1]+mv[1])/2]
+                        break
+                if len(cnts)==1:
+                    w = bb[2] - bb[0]
+                    h = bb[3] - bb[1]
+                    mx = min(cnt[0], self.image_size[0]-cnt[0])
+                    my = min(cnt[1], self.image_size[1]-cnt[1])
+                    if mx<w and my<h:
+                        x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
+                        y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
+                        cnts.append((x, y))
+                    elif mx<w:
+                        x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
+                        y = cnt[1]
+                        cnts.append((x, y))
+                    elif my<h:
+                        x = cnt[0]
+                        y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
+                        cnts.append((x, y))
+                if len(cnts)>=2:
+                    cnts = cnts[::-1]
+                    # print(cls, cnts)
+                    if len(cnts)<=4:
+                        # linear regression
+                        xs = [cnt[0] for cnt in cnts]
+                        ys = [cnt[1] for cnt in cnts]
+                        n = len(cnts)
+                        xcs = np.polyfit(range(n), xs, 1)
+                        ycs = np.polyfit(range(n), ys, 1)
+                        x = xcs[0] * n + xcs[1]
+                        y = ycs[0] * n + ycs[1]
+                        cnt = [x, y]
+                    else:
+                        # quadratic regression
+                        xs = [cnt[0] for cnt in cnts]
+                        ys = [cnt[1] for cnt in cnts]
+                        n = len(cnts)
+                        xcs = np.polyfit(range(n), xs, 2)
+                        ycs = np.polyfit(range(n), ys, 2)
+                        x = xcs[0] * n**2 + xcs[1] * n + xcs[2]
+                        y = ycs[0] * n**2 + ycs[1] * n + ycs[2]
+                        cnt = [x, y]
 
                 # estimate scaling speed of each object and predict next size
                 scale = p['scale']
-                cnt = [(box2d[2]+box2d[0])/2, (box2d[3]+box2d[1])/2]
-                w = box2d[2]-box2d[0]+1
-                h = box2d[3]-box2d[1]+1
+                bb = p['box2d']
+                w = bb[2]-bb[0]+1
+                h = bb[3]-bb[1]+1
                 sw = w * scale[0]
                 sh = h * scale[1]
-                x1 = int(cnt[0] - sw/2 + mv[0])
-                x2 = int(cnt[0] + sw/2 + mv[0])
-                y1 = int(cnt[1] - sh/2 + mv[1])
-                y2 = int(cnt[1] + sh/2 + mv[1])
+                x1 = int(cnt[0] - sw/2)
+                x2 = int(cnt[0] + sw/2)
+                y1 = int(cnt[1] - sh/2)
+                y2 = int(cnt[1] + sh/2)
                 box2d = [max(0, x1), max(0, y1), min(self.image_size[0]-1, x2), min(self.image_size[1]-1, y2)]
                 box2d = [min(box2d[0], box2d[2]), min(box2d[1], box2d[3]), max(box2d[0], box2d[2]), max(box2d[1], box2d[3])]
 
