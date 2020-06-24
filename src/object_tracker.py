@@ -391,7 +391,10 @@ class Tracker:
                 cnts = [cnt]
                 for i in range(2, 15):
                     if len(self.predictions)>=i:
-                        past_pred = self.predictions[-i][cls]
+                        try:
+                            past_pred = self.predictions[-i][cls]
+                        except:
+                            break
                         if p['id'] in map(lambda pp: pp['id'], past_pred):
                             bb = list(filter(lambda pp: pp['id']==p['id'], past_pred))[0]['box2d']
                             cnts.append(((bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
