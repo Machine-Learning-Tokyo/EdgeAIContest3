@@ -9,6 +9,7 @@ import time
 import pdb
 from collections import defaultdict
 
+
 class ScoringService(object):
     @classmethod
     def get_model(cls, model_path='../model/resnet50_csv_06.h5.frozen'):
@@ -27,7 +28,8 @@ class ScoringService(object):
         """
         print("get_model called")
         try:
-            cls.min_no_of_frames = 2
+
+            cls.min_no_of_frames = 2  # 2 seems more reasonable than 4 !!!
 
             cls.center_crop = False
             cls.left_crop = False
@@ -39,17 +41,56 @@ class ScoringService(object):
             cls.expansion = 0
             cls.scales = [0.2]
             cls.small_object_area = 2000000
-            cls.adaptive_threshold_for_pedestrian = False
+            cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
+            cls.adaptive_threshold_coefficient = 0.9  # DON'T USE ADAPTIVE THR !!!
+            cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
 
-            cls.model = models.load_model('../model/resnet101_csv_10.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')
-            # cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')
-            # cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')
-            # cls.model = models.load_model('../model/resnet101_csv_15.5classes.big_bboxes.h5.frozen', backbone_name='resnet101')
+            cls.model = models.load_model('../model/resnet101_csv_10.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8364, 0.9428
+            # cls.model = models.load_model('../model/resnet101_csv_09.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8374, 0.9503
+            # cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7678, 0.9158
+            # cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7713, 0.9244
+            # cls.model = models.load_model('../model/resnet101_csv_xx.5classes.big_bboxes.h5.frozen', backbone_name='resnet101')
 
             return True
         except Exception as e:
             print("Failed to load model {}".format(e))
             return False
+
+    @classmethod
+    def iou(cls, a, b):
+        if a[0] >= a[2] or a[1] >= a[3] or b[0] >= b[2] or b[1] >= b[3]:
+            return 0.0
+        # area_i = intersection(a, b)
+        x, y = max(a[0], b[0]), max(a[1], b[1])
+        w, h = min(a[2], b[2]) - x, min(a[3], b[3]) - y
+        area_i = 0 if w < 0 or h < 0 else w * h
+        # area_u = union(a, b, area_i)
+        area_a, area_b = (a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])
+        area_u = area_a + area_b - area_i
+        return area_i / (area_u + 1e-6)
+
+    @classmethod
+    def soft_nms(cls, boxes, probs, max_boxes=1000, threshold=0.5):
+        probs = probs.copy()
+        indices = np.argsort(probs, axis=0)[::-1]
+        output_indices = []
+        for n in range(max_boxes):
+            if len(indices) == 0:
+                break
+            bb, prob = boxes[indices[0]], probs[indices[0]]
+            if prob >= threshold:
+                output_indices.append(indices[0])
+            else:
+                break
+
+        probs[indices[0]] = 0
+        for idx in indices[1:]:
+            curr_bb, curr_prob = boxes[idx], probs[idx]
+            curr_iou = cls.iou(bb, curr_bb)
+            probs[idx] = probs[idx] * np.exp(-curr_iou ** 2 / 0.9)
+        indices = np.argsort(probs, axis=0)[::-1]
+
+        return np.array(indices, dtype=int)
 
     @classmethod
     def non_max_suppression_fast(cls, boxes, overlapThresh=0.5):
@@ -112,8 +153,8 @@ class ScoringService(object):
             # detection
             wc = cls.w // 2
             hc = cls.h // 2
-            # frame_darker = adjust_brightness(frame, -0.2)
-            frame_brighter = adjust_brightness(frame, 0.2)
+            # frame_darker = adjust_brightness(frame, -0.3)
+            frame_brighter = adjust_brightness(frame, 0.3)
 
             offset_x1_1 = int(wc - int(cls.w * cls.scales[0]))
             offset_y1_1 = int(hc - int(cls.h * cls.scales[0]))
@@ -121,7 +162,7 @@ class ScoringService(object):
             offset_y2_1 = int(hc + int(cls.h * cls.scales[0]))
 
             # center (center) crop
-            img_inf1 = frame[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
+            # img_inf1 = frame[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
 
             # left (center) crop
             # img_inf2 = frame_brighter[offset_y1_1:offset_y2_1, :offset_x2_1-offset_x1_1]
@@ -165,7 +206,6 @@ class ScoringService(object):
             # boxes[left_crop_order] = boxes[left_crop_order] / scale2
             # boxes[right_crop_order] = boxes[right_crop_order] / scale3
             # boxes[flip_lr_order] = boxes[flip_lr_order] / scale4
-
 
             clean_bboxes_, clean_classes_pred_, clean_scores_ = [], [], []
 
@@ -235,7 +275,7 @@ class ScoringService(object):
                         break
 
                     # relax the confidence thresholds for bboxes detected (PEDESTRIAN) on left crop
-                    if (label_ == 0 and score_ >= cls.threshold_pedestrian * 0.8) or \
+                    if (label_ == 0 and score_ >= cls.threshold_pedestrian * cls.adaptive_threshold_coefficient) or \
                             (label_ == 1 and score_ >= cls.threshold_car):
                         [x1, y1, x2, y2] = bbox_
                         y1 += offset_y1_1
@@ -261,7 +301,8 @@ class ScoringService(object):
                 for bbox_, score_, label_ in zip(boxes[right_crop_order], scores[right_crop_order], labels[right_crop_order]):
                     if label_ == -1:
                         break
-                    if (label_ == 0 and score_ >= cls.threshold_pedestrian * 0.8) or (label_ == 1 and score_ >= cls.threshold_car):
+                    if (label_ == 0 and score_ >= cls.threshold_pedestrian * cls.adaptive_threshold_coefficient) or \
+                            (label_ == 1 and score_ >= cls.threshold_car):
                         [x1, y1, x2, y2] = bbox_
                         x1 += x_offset_3
                         y1 += offset_y1_1
@@ -291,8 +332,8 @@ class ScoringService(object):
                         break
 
                     [x1, y1, x2, y2] = bbox_
-                    if label_ == 0 and (x1 < offset_x1_1 or x2 > offset_x2_1):
-                        pedestrian_conf_score_mult = 0.8
+                    if label_ == 0 and (x1 < offset_x1_1 or x2 > offset_x2_1) and cls.adaptive_threshold_for_pedestrian:
+                        pedestrian_conf_score_mult = cls.adaptive_threshold_coefficient
                     else:
                         pedestrian_conf_score_mult = 1
 
@@ -321,16 +362,41 @@ class ScoringService(object):
                         clean_classes_pred_.append(label_)
                         clean_scores_.append(score_)
 
-            pick_inds = cls.non_max_suppression_fast(np.array(clean_bboxes_))
-            clean_bboxes = list(clean_bboxes_[i] for i in pick_inds)
-            clean_classes_pred = list(clean_classes_pred_[i] for i in pick_inds)
-            clean_scores = list(clean_scores_[i] for i in pick_inds)
+            # frame0 = frame.copy()
+            # drawed0 = cls.draw_bboxes(clean_bboxes_, frame0)
+            # cv2.imwrite('/ext/drawed.png', drawed0)
 
-            clean_bboxes, clean_classes_pred, clean_scores = cls.apply_heuristics(clean_bboxes,
-                                                                                  clean_classes_pred,
-                                                                                  clean_scores,
-                                                                                  offset_y1_1,
-                                                                                  offset_y2_1)
+            if cls.center_crop or cls.left_crop or cls.right_crop or cls.flip_lr:
+                pick_inds = cls.non_max_suppression_fast(np.array(clean_bboxes_))
+                # pick_inds2 = cls.soft_nms(np.array(clean_bboxes_), np.array(clean_scores_))
+
+                clean_bboxes = list(clean_bboxes_[i] for i in pick_inds)
+                clean_classes_pred = list(clean_classes_pred_[i] for i in pick_inds)
+                clean_scores = list(clean_scores_[i] for i in pick_inds)
+                # frame1 = frame.copy()
+                # drawed1 = cls.draw_bboxes(clean_bboxes, frame1)
+                # cv2.imwrite('/ext/drawed_nms.png', drawed1)
+
+                # clean_bboxes2 = list(clean_bboxes_[i] for i in pick_inds2)
+                # clean_classes_pred2 = list(clean_classes_pred_[i] for i in pick_inds2)
+                # clean_scores2 = list(clean_scores_[i] for i in pick_inds2)
+
+                # frame2 = frame.copy()
+                # drawed2 = cls.draw_bboxes(clean_bboxes2, frame2)
+                # cv2.imwrite('/ext/drawed_soft_nms.png', drawed2)
+                # pdb.set_trace()
+
+            else:
+                clean_bboxes = clean_bboxes_
+                clean_classes_pred = clean_classes_pred_
+                clean_scores = clean_scores_
+
+            if cls.apply_heuristic_post_processing:
+                clean_bboxes, clean_classes_pred, clean_scores = cls.apply_heuristics(clean_bboxes,
+                                                                                      clean_classes_pred,
+                                                                                      clean_scores,
+                                                                                      offset_y1_1,
+                                                                                      offset_y2_1)
 
             # pdb.set_trace()
             # drawed1 = cls.draw_bboxes(clean_bboxes, frame)
