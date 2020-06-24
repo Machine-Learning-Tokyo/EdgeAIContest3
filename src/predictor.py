@@ -28,7 +28,6 @@ class ScoringService(object):
         """
         print("get_model called")
         try:
-
             cls.min_no_of_frames = 2  # 2 seems more reasonable than 4 !!!
 
             cls.center_crop = False
@@ -42,14 +41,13 @@ class ScoringService(object):
             cls.scales = [0.2]
             cls.small_object_area = 2000000
             cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
-            cls.adaptive_threshold_coefficient = 0.9  # DON'T USE ADAPTIVE THR !!!
+            cls.adaptive_threshold_coefficient = 1  # DON'T USE ADAPTIVE THR !!! =1 means no adaptive thr
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
 
-            cls.model = models.load_model('../model/resnet101_csv_10.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8364, 0.9428
-            # cls.model = models.load_model('../model/resnet101_csv_09.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8374, 0.9503
-            # cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7678, 0.9158
+            # cls.model = models.load_model('../model/resnet101_csv_10.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8364, 0.9428
+            cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7678, 0.9158
             # cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7713, 0.9244
-            # cls.model = models.load_model('../model/resnet101_csv_xx.5classes.big_bboxes.h5.frozen', backbone_name='resnet101')
+            # cls.model = models.load_model('../model/resnet101_csv_10.5classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8406, 0.9495
 
             return True
         except Exception as e:
@@ -368,24 +366,9 @@ class ScoringService(object):
 
             if cls.center_crop or cls.left_crop or cls.right_crop or cls.flip_lr:
                 pick_inds = cls.non_max_suppression_fast(np.array(clean_bboxes_))
-                # pick_inds2 = cls.soft_nms(np.array(clean_bboxes_), np.array(clean_scores_))
-
                 clean_bboxes = list(clean_bboxes_[i] for i in pick_inds)
                 clean_classes_pred = list(clean_classes_pred_[i] for i in pick_inds)
                 clean_scores = list(clean_scores_[i] for i in pick_inds)
-                # frame1 = frame.copy()
-                # drawed1 = cls.draw_bboxes(clean_bboxes, frame1)
-                # cv2.imwrite('/ext/drawed_nms.png', drawed1)
-
-                # clean_bboxes2 = list(clean_bboxes_[i] for i in pick_inds2)
-                # clean_classes_pred2 = list(clean_classes_pred_[i] for i in pick_inds2)
-                # clean_scores2 = list(clean_scores_[i] for i in pick_inds2)
-
-                # frame2 = frame.copy()
-                # drawed2 = cls.draw_bboxes(clean_bboxes2, frame2)
-                # cv2.imwrite('/ext/drawed_soft_nms.png', drawed2)
-                # pdb.set_trace()
-
             else:
                 clean_bboxes = clean_bboxes_
                 clean_classes_pred = clean_classes_pred_
@@ -407,8 +390,10 @@ class ScoringService(object):
             for bbox, score, label in zip(clean_bboxes, clean_scores, clean_classes_pred):
                 if label == 0:  # Pedestrian
                     pedestrian_list.append({"box2d": bbox})
-                else:  # Car
+                elif label == 1:  # Car
                     car_list.append({"box2d": bbox})
+                else:
+                    continue
 
             current_frame = {"Car": car_list, "Pedestrian": pedestrian_list}
             pred_tracking = cls.tracker.assign_ids(current_frame, frame)
