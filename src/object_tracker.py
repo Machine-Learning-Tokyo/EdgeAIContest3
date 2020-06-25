@@ -16,7 +16,7 @@ class Tracker:
         self.init_predictions = {'Car': [], 'Pedestrian': []}
         self.predictions = [self.init_predictions]; # past predictions in the format {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
         self.image_size = image_size # input frame resolution: (width, height)
-        self.max_occ_frames = 24 # max number of frames for which the tracker keeps occluded objects
+        self.max_occ_frames = 16 # max number of frames for which the tracker keeps occluded objects
         self.frame_out_thresh = 0.2
         self.box_area_thresh = 1024 # ignore bounding boxes with area less than this threshold(px)
         self.last_id = -1 # the biggest ID already assigned so far
@@ -34,9 +34,9 @@ class Tracker:
 
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
-        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.03, 1.09]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.035, 1.09]} # [a, b]: a is for box distance, b is for box size difference
         self.h_sim_weight = {'Car': 1.37, 'Pedestrian': 1.41} # cost for two boxes' image similarity
-        self.h_occ_weight = {'Car': 0.91, 'Pedestrian': 1.5} # cost to detect a object in the previous frame as occluded (need better costs!!)
+        self.h_occ_weight = {'Car': 0.88, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
         self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
 
 
@@ -402,23 +402,27 @@ class Tracker:
                             break
                     else:
                         break
+
+                # if an object is not in previous frames and it's on the edge of a frame,
+                # estimate the previous position
                 if len(cnts)==1:
                     w = bb[2] - bb[0]
                     h = bb[3] - bb[1]
                     mx = min(cnt[0], self.image_size[0]-cnt[0])
                     my = min(cnt[1], self.image_size[1]-cnt[1])
-                    if mx<w and my<h:
+                    if mx<w*1.0 and my<h*1.0:
                         x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
                         y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
                         cnts.append((x, y))
-                    elif mx<w:
+                    elif mx<w*1.0:
                         x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
                         y = cnt[1]
                         cnts.append((x, y))
-                    elif my<h:
+                    elif my<h*1.0:
                         x = cnt[0]
                         y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
                         cnts.append((x, y))
+
                 if len(cnts)>=2:
                     cnts = cnts[::-1]
                     # print(cls, cnts)
@@ -531,6 +535,7 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--input_pred", type=str, dest="input_pred_path", required=True, help="input prediction directory path")
     parser.add_argument("-v", "--input_video", type=str, dest="input_video_path", required=True, help="input video directory path")
     parser.add_argument("-o", "--output", type=str, dest="output_path", required=True, help="output file path")
+    parser.add_argument("-d", "--debug", dest="debug", action="store_true", help="output file path")
     args = parser.parse_args()
 
     video_total = {'Car': 0, 'Pedestrian': 0}
@@ -542,8 +547,9 @@ if __name__ == '__main__':
         (128, 128, 255), (128, 128, 128), (0, 0, 0), (255, 255, 255),
     ]
 
-    if not os.path.exists('debug'):
-        os.mkdir('debug')
+    if args.debug:
+        if not os.path.exists('debug'):
+            os.mkdir('debug')
 
     records = []
 
@@ -560,9 +566,10 @@ if __name__ == '__main__':
         total = {'Car': 0, 'Pedestrian': 0}
         sw = {'Car': 0, 'Pedestrian': 0}
         tp = {'Car': 0, 'Pedestrian': 0}
-        if os.path.exists(os.path.join('debug', video_name.split('.')[0])):
-            shutil.rmtree(os.path.join('debug', video_name.split('.')[0]))
-        os.mkdir(os.path.join('debug', video_name.split('.')[0]))
+        if args.debug:
+            if os.path.exists(os.path.join('debug', video_name.split('.')[0])):
+                shutil.rmtree(os.path.join('debug', video_name.split('.')[0]))
+            os.mkdir(os.path.join('debug', video_name.split('.')[0]))
         for frame in range(len(ground_truths)):
             if frame%100==0:
                 print(f'"{video_name}" Frame {frame+1}: ', end='')
@@ -589,9 +596,10 @@ if __name__ == '__main__':
                         prev_id_map[cls][gt_id] = m_id
                 prev_image = image
             else:
-                debug_image1 = prev_image.copy()
-                debug_image2 = image.copy()
-                debug_idx = 0
+                if args.debug:
+                    debug_image1 = prev_image.copy()
+                    debug_image2 = image.copy()
+                    debug_idx = 0
                 id_map = {'Car': {}, 'Pedestrian': {}}
                 for cls, gt in ground_truth.items():
                     bm = 0
@@ -620,21 +628,23 @@ if __name__ == '__main__':
                             prev_m_id = prev_id_map[cls][gt_id]
                             if gt_id in id_map[cls].keys():
                                 if prev_m_id!=id_map[cls][gt_id]:
-                                    debug_bb1 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-2][cls]))
-                                    debug_bb2 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-1][cls]))
-                                    if len(debug_bb1)>0 and len(debug_bb2)>0:
-                                        debug_bb1 = debug_bb1[0]['box2d']
-                                        debug_bb2 = debug_bb2[0]['box2d']
-                                        debug_image1 = cv2.rectangle(debug_image1, (debug_bb1[0], debug_bb1[1]), (debug_bb1[2], debug_bb1[3]), colors[debug_idx], 3)
-                                        debug_image2 = cv2.rectangle(debug_image2, (debug_bb2[0], debug_bb2[1]), (debug_bb2[2], debug_bb2[3]), colors[debug_idx], 3)
-                                        debug_idx += 1
+                                    if args.debug:
+                                        debug_bb1 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-2][cls]))
+                                        debug_bb2 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-1][cls]))
+                                        if len(debug_bb1)>0 and len(debug_bb2)>0:
+                                            debug_bb1 = debug_bb1[0]['box2d']
+                                            debug_bb2 = debug_bb2[0]['box2d']
+                                            debug_image1 = cv2.rectangle(debug_image1, (debug_bb1[0], debug_bb1[1]), (debug_bb1[2], debug_bb1[3]), colors[debug_idx], 3)
+                                            debug_image2 = cv2.rectangle(debug_image2, (debug_bb2[0], debug_bb2[1]), (debug_bb2[2], debug_bb2[3]), colors[debug_idx], 3)
+                                            debug_idx += 1
                                     sw[cls] += 1
                                 else:
                                     tp[cls] += 1
                 for k, v in id_map.items():
                     prev_id_map[k] = v
-                debug_image = np.concatenate([debug_image1, debug_image2], axis=1)
-                cv2.imwrite(os.path.join('debug', video_name.split('.')[0], f'{frame}.png'), debug_image)
+                if args.debug:
+                    debug_image = np.concatenate([debug_image1, debug_image2], axis=1)
+                    cv2.imwrite(os.path.join('debug', video_name.split('.')[0], f'{frame}.png'), debug_image)
                 prev_image = image
 
             t2 = time.time()
