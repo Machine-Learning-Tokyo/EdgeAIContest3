@@ -9,6 +9,7 @@ from queue import Queue
 from glob import glob
 from argparse import ArgumentParser
 from statistics import mean
+from concurrent.futures import ProcessPoolExecutor
 
 
 class Tracker:
@@ -389,23 +390,34 @@ class Tracker:
                 # estimate speed (motion vector) of each object and predict next position
                 # using up to 16 past frames
                 cnts = [cnt]
+                n_empty = 0
                 for i in range(2, 15):
                     if len(self.predictions)>=i:
                         try:
                             past_pred = self.predictions[-i][cls]
                         except:
-                            break
+                            if n_empty>=1 or i>=4:
+                                break
+                            n_empty += 1
+                            cnts.append(None)
+                            continue
                         if p['id'] in map(lambda pp: pp['id'], past_pred):
                             bb = list(filter(lambda pp: pp['id']==p['id'], past_pred))[0]['box2d']
                             cnts.append(((bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
                         else:
-                            break
+                            if n_empty>=1 or i>=4:
+                                break
+                            n_empty += 1
+                            cnts.append(None)
+                            continue
                     else:
                         break
 
+                n_sample = len(list(filter(lambda c: c is not None, cnts)))
+
                 # if an object is not in previous frames and it's on the edge of a frame,
                 # estimate the previous position
-                if len(cnts)==1:
+                if n_sample==1:
                     w = bb[2] - bb[0]
                     h = bb[3] - bb[1]
                     mx = min(cnt[0], self.image_size[0]-cnt[0])
@@ -423,26 +435,32 @@ class Tracker:
                         y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
                         cnts.append((x, y))
 
-                if len(cnts)>=2:
+                if n_sample>=2:
                     cnts = cnts[::-1]
+                    while cnts[-1] is None:
+                        cnts = cnts[:-1]
                     # print(cls, cnts)
-                    if len(cnts)<=4:
+                    ts = []
+                    for i in range(len(cnts)):
+                        if cnts[i] is not None:
+                            ts.append(i)
+                    if n_sample<=4:
                         # linear regression
-                        xs = [cnt[0] for cnt in cnts]
-                        ys = [cnt[1] for cnt in cnts]
+                        xs = [cnt[0] for cnt in cnts if cnt is not None]
+                        ys = [cnt[1] for cnt in cnts if cnt is not None]
                         n = len(cnts)
-                        xcs = np.polyfit(range(n), xs, 1)
-                        ycs = np.polyfit(range(n), ys, 1)
+                        xcs = np.polyfit(ts, xs, 1)
+                        ycs = np.polyfit(ts, ys, 1)
                         x = xcs[0] * n + xcs[1]
                         y = ycs[0] * n + ycs[1]
                         cnt = [x, y]
                     else:
                         # quadratic regression
-                        xs = [cnt[0] for cnt in cnts]
-                        ys = [cnt[1] for cnt in cnts]
+                        xs = [cnt[0] for cnt in cnts if cnt is not None]
+                        ys = [cnt[1] for cnt in cnts if cnt is not None]
                         n = len(cnts)
-                        xcs = np.polyfit(range(n), xs, 2)
-                        ycs = np.polyfit(range(n), ys, 2)
+                        xcs = np.polyfit(ts, xs, 2)
+                        ycs = np.polyfit(ts, ys, 2)
                         x = xcs[0] * n**2 + xcs[1] * n + xcs[2]
                         y = ycs[0] * n**2 + ycs[1] * n + ycs[2]
                         cnt = [x, y]
@@ -532,10 +550,12 @@ class Tracker:
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument("-i", "--input_pred", type=str, dest="input_pred_path", required=True, help="input prediction directory path")
-    parser.add_argument("-v", "--input_video", type=str, dest="input_video_path", required=True, help="input video directory path")
+    parser.add_argument("--input_pred", type=str, dest="input_pred_path", required=True, help="input prediction directory path")
+    parser.add_argument("--input_video", type=str, dest="input_video_path", required=True, help="input video directory path")
     parser.add_argument("-o", "--output", type=str, dest="output_path", required=True, help="output file path")
     parser.add_argument("-d", "--debug", dest="debug", action="store_true", help="output file path")
+    parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="verbose")
+    parser.add_argument("-p", "--process", dest="nproc", type=int, default=1, help='The max number of process')
     args = parser.parse_args()
 
     video_total = {'Car': 0, 'Pedestrian': 0}
@@ -551,10 +571,7 @@ if __name__ == '__main__':
         if not os.path.exists('debug'):
             os.mkdir('debug')
 
-    records = []
-
-    for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
-        max_time = 0
+    def evaluate_video(pred):
         with open(pred) as f:
             ground_truths = json.load(f)
         ground_truths = ground_truths['sequence']
@@ -566,12 +583,13 @@ if __name__ == '__main__':
         total = {'Car': 0, 'Pedestrian': 0}
         sw = {'Car': 0, 'Pedestrian': 0}
         tp = {'Car': 0, 'Pedestrian': 0}
+        max_time = 0
         if args.debug:
             if os.path.exists(os.path.join('debug', video_name.split('.')[0])):
                 shutil.rmtree(os.path.join('debug', video_name.split('.')[0]))
             os.mkdir(os.path.join('debug', video_name.split('.')[0]))
         for frame in range(len(ground_truths)):
-            if frame%100==0:
+            if frame%100==0 and args.verbose:
                 print(f'"{video_name}" Frame {frame+1}: ', end='')
             _, image = video.read()
             ground_truth = ground_truths[frame]
@@ -649,19 +667,34 @@ if __name__ == '__main__':
 
             t2 = time.time()
             max_time = max(max_time, t2-t1)
-            if frame%100==0:
+            if frame%100==0 and args.verbose:
                 print(f'#Car={len(ground_truth["Car"])}, #Pedestrian={len(ground_truth["Pedestrian"])}, ', end='')
                 print(f'Time={t2-t1:.8f}({max_time:.8f}@max), Cost={tracker.total_cost}')
         print(f'Overall ({video_name})')
         record = {'Name': video_name}
         for cls in sw.keys():
-            video_total[cls] += 1
-            video_error[cls] += sw[cls]/total[cls]
             record[cls] = sw[cls]/total[cls]
             print(f'    {cls}: total={total[cls]}, sw={sw[cls]}, tp={tp[cls]}, err={sw[cls]/total[cls]:.8f}')
         record['Avg'] = (sw['Car']/total['Car']+sw['Pedestrian']/total['Pedestrian']) / 2
-        records.append(record)
         print(f'    All: err={(sw["Car"]/total["Car"]+sw["Pedestrian"]/total["Pedestrian"])/2:.8f}')
+        return sw, total, record
+
+    executor = ProcessPoolExecutor(max_workers=args.nproc)
+    q = []
+    records = []
+    input_files = sorted(glob(os.path.join(args.input_pred_path, '*')))
+
+    for nv, pred in enumerate(input_files):
+        q.append(pred)
+        if len(q)==args.nproc or nv==len(input_files)-1:
+            res = executor.map(evaluate_video, q)
+            for r in res:
+                sw, total, record = r
+                for cls in sw.keys():
+                    video_total[cls] += 1
+                    video_error[cls] += sw[cls]/total[cls]
+                records.append(record)
+            q = []
     print(f'Complete Result:')
     print(f'    Car: {video_error["Car"]/video_total["Car"]:.8f}')
     print(f'    Pedestrian: {video_error["Pedestrian"]/video_total["Pedestrian"]:.8f}')
