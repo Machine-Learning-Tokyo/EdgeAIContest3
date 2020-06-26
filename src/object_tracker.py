@@ -691,18 +691,14 @@ if __name__ == '__main__':
     q = []
     records = []
     input_files = sorted(glob(os.path.join(args.input_pred_path, '*')))
+    res = executor.map(evaluate_video, input_files)
+    for r in res:
+        sw, total, record = r
+        for cls in sw.keys():
+            video_total[cls] += 1
+            video_error[cls] += sw[cls]/total[cls]
+        records.append(record)
 
-    for nv, pred in enumerate(input_files):
-        q.append(pred)
-        if len(q)==args.nproc or nv==len(input_files)-1:
-            res = executor.map(evaluate_video, q)
-            for r in res:
-                sw, total, record = r
-                for cls in sw.keys():
-                    video_total[cls] += 1
-                    video_error[cls] += sw[cls]/total[cls]
-                records.append(record)
-            q = []
     print(f'Complete Result:')
     print(f'    Car: {video_error["Car"]/video_total["Car"]:.8f}')
     print(f'    Pedestrian: {video_error["Pedestrian"]/video_total["Pedestrian"]:.8f}')
