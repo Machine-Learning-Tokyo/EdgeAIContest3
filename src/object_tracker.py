@@ -17,8 +17,8 @@ class Tracker:
         self.init_predictions = {'Car': [], 'Pedestrian': []}
         self.predictions = [self.init_predictions]; # past predictions in the format {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
         self.image_size = image_size # input frame resolution: (width, height)
-        self.max_occ_frames = 16 # max number of frames for which the tracker keeps occluded objects
-        self.frame_out_thresh = 0.2
+        self.max_occ_frames = 12 # max number of frames for which the tracker keeps occluded objects
+        self.frame_out_thresh = {'Car': 0.2, 'Pedestrian': 0.2}
         self.box_area_thresh = 1024 # ignore bounding boxes with area less than this threshold(px)
         self.last_id = -1 # the biggest ID already assigned so far
         self.total_cost = 0
@@ -34,11 +34,11 @@ class Tracker:
         self.occ_weight = {'Car': 0.84, 'Pedestrian': 1.35}
 
         # cost weights for hungarian matching
-        self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
-        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.035, 1.09]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_max_frame_in = {'Car': 6, 'Pedestrian': 7}
+        self.h_cost_weight = {'Car': [0.14, 1.38], 'Pedestrian': [0.038, 1.13]} # [a, b]: a is for box distance, b is for box size difference
         self.h_sim_weight = {'Car': 1.37, 'Pedestrian': 1.41} # cost for two boxes' image similarity
         self.h_occ_weight = {'Car': 0.88, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
-        self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
+        self.h_frame_in_weight = {'Car': 0.2, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
 
     def calculate_cost(self, box1, box2, hist1, hist2, hist_mask, cls='Car', match_type='full'):
@@ -46,7 +46,6 @@ class Tracker:
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
-
         hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(3)]
         # hist_score = mean(hist_score)
         hist_score = min(hist_score)
@@ -90,6 +89,7 @@ class Tracker:
                 match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], hist_mask, cls, match_type='hungarian')
         best_box_map = []
         min_cost = 1e16
+        no_update = 0
         for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
             prev_min_cost = min_cost
             n_match = n1 - n_occ
@@ -253,6 +253,14 @@ class Tracker:
                 min_cost = cost
                 best_box_map = box_map
 
+            if min_cost==prev_min_cost:
+                no_update += 1
+            else:
+                no_update = 0
+
+            if no_update>=4:
+                break
+
         return best_box_map, min_cost
 
 
@@ -391,7 +399,7 @@ class Tracker:
                 # using up to 16 past frames
                 cnts = [cnt]
                 n_empty = 0
-                for i in range(2, 15):
+                for i in range(2, 13):
                     if len(self.predictions)>=i:
                         try:
                             past_pred = self.predictions[-i][cls]
@@ -487,7 +495,7 @@ class Tracker:
                 # filter out objects that are predicted to have gone outside of the frame
                 box2d_inside = [max(0, box2d[0]), max(0, box2d[1]), min(self.image_size[0]-1, box2d[2]), min(self.image_size[1]-1, box2d[3])]
                 area_inside = (box2d_inside[2]-box2d_inside[0]+1) * (box2d_inside[3]-box2d_inside[1]+1)
-                if area_inside <=area*self.frame_out_thresh:
+                if area_inside <=area*self.frame_out_thresh[cls]:
                     n_frame_out += 1
                     continue
                 adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image']})
@@ -702,6 +710,6 @@ if __name__ == '__main__':
     print()
     print('Short Log:')
     for record in records:
-        print(f'{record["Name"]}: {record["Car"]:.4f}(Car), {record["Pedestrian"]:.4f}(Pedestrian), {record["Avg"]:.4f}(Avg)')
-    print(f'Average      : {video_error["Car"]/video_total["Car"]:.4f}(Car), {video_error["Pedestrian"]/video_total["Pedestrian"]:.4f}(Pedestrian), {(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.4f}(Avg)')
+        print(f'{record["Name"]}: {record["Car"]:.5f}(Car), {record["Pedestrian"]:.5f}(Pedestrian), {record["Avg"]:.5f}(Avg)')
+    print(f'Average      : {video_error["Car"]/video_total["Car"]:.5f}(Car), {video_error["Pedestrian"]/video_total["Pedestrian"]:.5f}(Pedestrian), {(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.5f}(Avg)')
 
