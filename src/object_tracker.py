@@ -9,6 +9,7 @@ from queue import Queue
 from glob import glob
 from argparse import ArgumentParser
 from statistics import mean
+from concurrent.futures import ProcessPoolExecutor
 
 
 class Tracker:
@@ -16,8 +17,8 @@ class Tracker:
         self.init_predictions = {'Car': [], 'Pedestrian': []}
         self.predictions = [self.init_predictions]; # past predictions in the format {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
         self.image_size = image_size # input frame resolution: (width, height)
-        self.max_occ_frames = 24 # max number of frames for which the tracker keeps occluded objects
-        self.frame_out_thresh = 0.2
+        self.max_occ_frames = 12 # max number of frames for which the tracker keeps occluded objects
+        self.frame_out_thresh = {'Car': 0.2, 'Pedestrian': 0.2}
         self.box_area_thresh = 1024 # ignore bounding boxes with area less than this threshold(px)
         self.last_id = -1 # the biggest ID already assigned so far
         self.total_cost = 0
@@ -33,11 +34,11 @@ class Tracker:
         self.occ_weight = {'Car': 0.84, 'Pedestrian': 1.35}
 
         # cost weights for hungarian matching
-        self.h_max_frame_in = {'Car': 4, 'Pedestrian': 5}
-        self.h_cost_weight = {'Car': [0.16, 1.41], 'Pedestrian': [0.03, 1.09]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_max_frame_in = {'Car': 6, 'Pedestrian': 7}
+        self.h_cost_weight = {'Car': [0.14, 1.38], 'Pedestrian': [0.038, 1.13]} # [a, b]: a is for box distance, b is for box size difference
         self.h_sim_weight = {'Car': 1.37, 'Pedestrian': 1.41} # cost for two boxes' image similarity
-        self.h_occ_weight = {'Car': 0.91, 'Pedestrian': 1.5} # cost to detect a object in the previous frame as occluded (need better costs!!)
-        self.h_frame_in_weight = {'Car': 0.37, 'Pedestrian': 0.47} # cost to detect a object as in the current frame as newly framed in
+        self.h_occ_weight = {'Car': 0.88, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
+        self.h_frame_in_weight = {'Car': 0.2, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
 
     def calculate_cost(self, box1, box2, hist1, hist2, hist_mask, cls='Car', match_type='full'):
@@ -45,7 +46,6 @@ class Tracker:
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
-
         hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(3)]
         # hist_score = mean(hist_score)
         hist_score = min(hist_score)
@@ -89,6 +89,7 @@ class Tracker:
                 match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], hist_mask, cls, match_type='hungarian')
         best_box_map = []
         min_cost = 1e16
+        no_update = 0
         for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
             prev_min_cost = min_cost
             n_match = n1 - n_occ
@@ -252,6 +253,14 @@ class Tracker:
                 min_cost = cost
                 best_box_map = box_map
 
+            if min_cost==prev_min_cost:
+                no_update += 1
+            else:
+                no_update = 0
+
+            if no_update>=4:
+                break
+
         return best_box_map, min_cost
 
 
@@ -389,56 +398,77 @@ class Tracker:
                 # estimate speed (motion vector) of each object and predict next position
                 # using up to 16 past frames
                 cnts = [cnt]
-                for i in range(2, 15):
+                n_empty = 0
+                for i in range(2, 13):
                     if len(self.predictions)>=i:
                         try:
                             past_pred = self.predictions[-i][cls]
                         except:
-                            break
+                            if n_empty>=1 or i>=4:
+                                break
+                            n_empty += 1
+                            cnts.append(None)
+                            continue
                         if p['id'] in map(lambda pp: pp['id'], past_pred):
                             bb = list(filter(lambda pp: pp['id']==p['id'], past_pred))[0]['box2d']
                             cnts.append(((bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
                         else:
-                            break
+                            if n_empty>=1 or i>=4:
+                                break
+                            n_empty += 1
+                            cnts.append(None)
+                            continue
                     else:
                         break
-                if len(cnts)==1:
+
+                n_sample = len(list(filter(lambda c: c is not None, cnts)))
+
+                # if an object is not in previous frames and it's on the edge of a frame,
+                # estimate the previous position
+                if n_sample==1:
                     w = bb[2] - bb[0]
                     h = bb[3] - bb[1]
                     mx = min(cnt[0], self.image_size[0]-cnt[0])
                     my = min(cnt[1], self.image_size[1]-cnt[1])
-                    if mx<w and my<h:
+                    if mx<w*1.0 and my<h*1.0:
                         x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
                         y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
                         cnts.append((x, y))
-                    elif mx<w:
+                    elif mx<w*1.0:
                         x = 0 if cnt[0]<self.image_size[0]-cnt[0] else self.image_size[0]-1
                         y = cnt[1]
                         cnts.append((x, y))
-                    elif my<h:
+                    elif my<h*1.0:
                         x = cnt[0]
                         y = 0 if cnt[1]<self.image_size[1]-cnt[1] else self.image_size[1]-1
                         cnts.append((x, y))
-                if len(cnts)>=2:
+
+                if n_sample>=2:
                     cnts = cnts[::-1]
+                    while cnts[-1] is None:
+                        cnts = cnts[:-1]
                     # print(cls, cnts)
-                    if len(cnts)<=4:
+                    ts = []
+                    for i in range(len(cnts)):
+                        if cnts[i] is not None:
+                            ts.append(i)
+                    if n_sample<=4:
                         # linear regression
-                        xs = [cnt[0] for cnt in cnts]
-                        ys = [cnt[1] for cnt in cnts]
+                        xs = [cnt[0] for cnt in cnts if cnt is not None]
+                        ys = [cnt[1] for cnt in cnts if cnt is not None]
                         n = len(cnts)
-                        xcs = np.polyfit(range(n), xs, 1)
-                        ycs = np.polyfit(range(n), ys, 1)
+                        xcs = np.polyfit(ts, xs, 1)
+                        ycs = np.polyfit(ts, ys, 1)
                         x = xcs[0] * n + xcs[1]
                         y = ycs[0] * n + ycs[1]
                         cnt = [x, y]
                     else:
                         # quadratic regression
-                        xs = [cnt[0] for cnt in cnts]
-                        ys = [cnt[1] for cnt in cnts]
+                        xs = [cnt[0] for cnt in cnts if cnt is not None]
+                        ys = [cnt[1] for cnt in cnts if cnt is not None]
                         n = len(cnts)
-                        xcs = np.polyfit(range(n), xs, 2)
-                        ycs = np.polyfit(range(n), ys, 2)
+                        xcs = np.polyfit(ts, xs, 2)
+                        ycs = np.polyfit(ts, ys, 2)
                         x = xcs[0] * n**2 + xcs[1] * n + xcs[2]
                         y = ycs[0] * n**2 + ycs[1] * n + ycs[2]
                         cnt = [x, y]
@@ -465,7 +495,7 @@ class Tracker:
                 # filter out objects that are predicted to have gone outside of the frame
                 box2d_inside = [max(0, box2d[0]), max(0, box2d[1]), min(self.image_size[0]-1, box2d[2]), min(self.image_size[1]-1, box2d[3])]
                 area_inside = (box2d_inside[2]-box2d_inside[0]+1) * (box2d_inside[3]-box2d_inside[1]+1)
-                if area_inside <=area*self.frame_out_thresh:
+                if area_inside <=area*self.frame_out_thresh[cls]:
                     n_frame_out += 1
                     continue
                 adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image']})
@@ -528,9 +558,12 @@ class Tracker:
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument("-i", "--input_pred", type=str, dest="input_pred_path", required=True, help="input prediction directory path")
-    parser.add_argument("-v", "--input_video", type=str, dest="input_video_path", required=True, help="input video directory path")
+    parser.add_argument("--input_pred", type=str, dest="input_pred_path", required=True, help="input prediction directory path")
+    parser.add_argument("--input_video", type=str, dest="input_video_path", required=True, help="input video directory path")
     parser.add_argument("-o", "--output", type=str, dest="output_path", required=True, help="output file path")
+    parser.add_argument("-d", "--debug", dest="debug", action="store_true", help="output file path")
+    parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="verbose")
+    parser.add_argument("-p", "--process", dest="nproc", type=int, default=1, help='The max number of process')
     args = parser.parse_args()
 
     video_total = {'Car': 0, 'Pedestrian': 0}
@@ -542,13 +575,11 @@ if __name__ == '__main__':
         (128, 128, 255), (128, 128, 128), (0, 0, 0), (255, 255, 255),
     ]
 
-    if not os.path.exists('debug'):
-        os.mkdir('debug')
+    if args.debug:
+        if not os.path.exists('debug'):
+            os.mkdir('debug')
 
-    records = []
-
-    for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
-        max_time = 0
+    def evaluate_video(pred):
         with open(pred) as f:
             ground_truths = json.load(f)
         ground_truths = ground_truths['sequence']
@@ -560,11 +591,13 @@ if __name__ == '__main__':
         total = {'Car': 0, 'Pedestrian': 0}
         sw = {'Car': 0, 'Pedestrian': 0}
         tp = {'Car': 0, 'Pedestrian': 0}
-        if os.path.exists(os.path.join('debug', video_name.split('.')[0])):
-            shutil.rmtree(os.path.join('debug', video_name.split('.')[0]))
-        os.mkdir(os.path.join('debug', video_name.split('.')[0]))
+        max_time = 0
+        if args.debug:
+            if os.path.exists(os.path.join('debug', video_name.split('.')[0])):
+                shutil.rmtree(os.path.join('debug', video_name.split('.')[0]))
+            os.mkdir(os.path.join('debug', video_name.split('.')[0]))
         for frame in range(len(ground_truths)):
-            if frame%100==0:
+            if frame%100==0 and args.verbose:
                 print(f'"{video_name}" Frame {frame+1}: ', end='')
             _, image = video.read()
             ground_truth = ground_truths[frame]
@@ -589,9 +622,10 @@ if __name__ == '__main__':
                         prev_id_map[cls][gt_id] = m_id
                 prev_image = image
             else:
-                debug_image1 = prev_image.copy()
-                debug_image2 = image.copy()
-                debug_idx = 0
+                if args.debug:
+                    debug_image1 = prev_image.copy()
+                    debug_image2 = image.copy()
+                    debug_idx = 0
                 id_map = {'Car': {}, 'Pedestrian': {}}
                 for cls, gt in ground_truth.items():
                     bm = 0
@@ -620,38 +654,51 @@ if __name__ == '__main__':
                             prev_m_id = prev_id_map[cls][gt_id]
                             if gt_id in id_map[cls].keys():
                                 if prev_m_id!=id_map[cls][gt_id]:
-                                    debug_bb1 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-2][cls]))
-                                    debug_bb2 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-1][cls]))
-                                    if len(debug_bb1)>0 and len(debug_bb2)>0:
-                                        debug_bb1 = debug_bb1[0]['box2d']
-                                        debug_bb2 = debug_bb2[0]['box2d']
-                                        debug_image1 = cv2.rectangle(debug_image1, (debug_bb1[0], debug_bb1[1]), (debug_bb1[2], debug_bb1[3]), colors[debug_idx], 3)
-                                        debug_image2 = cv2.rectangle(debug_image2, (debug_bb2[0], debug_bb2[1]), (debug_bb2[2], debug_bb2[3]), colors[debug_idx], 3)
-                                        debug_idx += 1
+                                    if args.debug:
+                                        debug_bb1 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-2][cls]))
+                                        debug_bb2 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-1][cls]))
+                                        if len(debug_bb1)>0 and len(debug_bb2)>0:
+                                            debug_bb1 = debug_bb1[0]['box2d']
+                                            debug_bb2 = debug_bb2[0]['box2d']
+                                            debug_image1 = cv2.rectangle(debug_image1, (debug_bb1[0], debug_bb1[1]), (debug_bb1[2], debug_bb1[3]), colors[debug_idx], 3)
+                                            debug_image2 = cv2.rectangle(debug_image2, (debug_bb2[0], debug_bb2[1]), (debug_bb2[2], debug_bb2[3]), colors[debug_idx], 3)
+                                            debug_idx += 1
                                     sw[cls] += 1
                                 else:
                                     tp[cls] += 1
                 for k, v in id_map.items():
                     prev_id_map[k] = v
-                debug_image = np.concatenate([debug_image1, debug_image2], axis=1)
-                cv2.imwrite(os.path.join('debug', video_name.split('.')[0], f'{frame}.png'), debug_image)
+                if args.debug:
+                    debug_image = np.concatenate([debug_image1, debug_image2], axis=1)
+                    cv2.imwrite(os.path.join('debug', video_name.split('.')[0], f'{frame}.png'), debug_image)
                 prev_image = image
 
             t2 = time.time()
             max_time = max(max_time, t2-t1)
-            if frame%100==0:
+            if frame%100==0 and args.verbose:
                 print(f'#Car={len(ground_truth["Car"])}, #Pedestrian={len(ground_truth["Pedestrian"])}, ', end='')
                 print(f'Time={t2-t1:.8f}({max_time:.8f}@max), Cost={tracker.total_cost}')
         print(f'Overall ({video_name})')
         record = {'Name': video_name}
         for cls in sw.keys():
-            video_total[cls] += 1
-            video_error[cls] += sw[cls]/total[cls]
             record[cls] = sw[cls]/total[cls]
             print(f'    {cls}: total={total[cls]}, sw={sw[cls]}, tp={tp[cls]}, err={sw[cls]/total[cls]:.8f}')
         record['Avg'] = (sw['Car']/total['Car']+sw['Pedestrian']/total['Pedestrian']) / 2
-        records.append(record)
         print(f'    All: err={(sw["Car"]/total["Car"]+sw["Pedestrian"]/total["Pedestrian"])/2:.8f}')
+        return sw, total, record
+
+    executor = ProcessPoolExecutor(max_workers=args.nproc)
+    q = []
+    records = []
+    input_files = sorted(glob(os.path.join(args.input_pred_path, '*')))
+    res = executor.map(evaluate_video, input_files)
+    for r in res:
+        sw, total, record = r
+        for cls in sw.keys():
+            video_total[cls] += 1
+            video_error[cls] += sw[cls]/total[cls]
+        records.append(record)
+
     print(f'Complete Result:')
     print(f'    Car: {video_error["Car"]/video_total["Car"]:.8f}')
     print(f'    Pedestrian: {video_error["Pedestrian"]/video_total["Pedestrian"]:.8f}')
@@ -659,6 +706,6 @@ if __name__ == '__main__':
     print()
     print('Short Log:')
     for record in records:
-        print(f'{record["Name"]}: {record["Car"]:.4f}(Car), {record["Pedestrian"]:.4f}(Pedestrian), {record["Avg"]:.4f}(Avg)')
-    print(f'Average      : {video_error["Car"]/video_total["Car"]:.4f}(Car), {video_error["Pedestrian"]/video_total["Pedestrian"]:.4f}(Pedestrian), {(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.4f}(Avg)')
+        print(f'{record["Name"]}: {record["Car"]:.5f}(Car), {record["Pedestrian"]:.5f}(Pedestrian), {record["Avg"]:.5f}(Avg)')
+    print(f'Average      : {video_error["Car"]/video_total["Car"]:.5f}(Car), {video_error["Pedestrian"]/video_total["Pedestrian"]:.5f}(Pedestrian), {(video_error["Car"]/video_total["Car"]+video_error["Pedestrian"]/video_total["Pedestrian"])/2:.5f}(Avg)')
 
