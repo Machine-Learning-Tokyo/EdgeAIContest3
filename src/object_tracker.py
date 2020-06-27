@@ -35,10 +35,10 @@ class Tracker:
 
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 6, 'Pedestrian': 7}
-        self.h_cost_weight = {'Car': [0.137, 1.38], 'Pedestrian': [0.0378, 1.13]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_cost_weight = {'Car': [0.137, 1.44], 'Pedestrian': [0.0378, 1.14]} # [a, b]: a is for box distance, b is for box size difference
         self.h_sim_weight = {'Car': 0.92, 'Pedestrian': 1.01} # cost for two boxes' image similarity
-        self.h_occ_weight = {'Car': 0.88, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
-        self.h_frame_in_weight = {'Car': 0.2, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
+        self.h_occ_weight = {'Car': 0.86, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
+        self.h_frame_in_weight = {'Car': 0.14, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
 
     def calculate_cost(self, box1, box2, hist1, hist2, hist_mask, cls='Car', match_type='full'):
