@@ -35,8 +35,8 @@ class Tracker:
 
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 6, 'Pedestrian': 7}
-        self.h_cost_weight = {'Car': [0.14, 1.38], 'Pedestrian': [0.038, 1.13]} # [a, b]: a is for box distance, b is for box size difference
-        self.h_sim_weight = {'Car': 1.37, 'Pedestrian': 1.41} # cost for two boxes' image similarity
+        self.h_cost_weight = {'Car': [0.137, 1.38], 'Pedestrian': [0.0378, 1.13]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_sim_weight = {'Car': 0.92, 'Pedestrian': 1.01} # cost for two boxes' image similarity
         self.h_occ_weight = {'Car': 0.88, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
         self.h_frame_in_weight = {'Car': 0.2, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
@@ -47,8 +47,8 @@ class Tracker:
 
         # compare the RGB histograms of two given bbox images
         hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(3)]
-        # hist_score = mean(hist_score)
-        hist_score = min(hist_score)
+        hist_score = mean(hist_score)
+        # hist_score = min(hist_score)
 
         cnt1 = [box1[0]+w1/2, box1[1]+h1/2]
         cnt2 = [box2[0]+w2/2, box2[1]+h2/2]
@@ -82,8 +82,8 @@ class Tracker:
                 hist_mask[y, hist_size//8*5+y*3//4:] = 0
                 hist_mask[hist_size//2+y, :y*3//4] = 0
                 hist_mask[hist_size//2+y, hist_size-y*3//4:] = 0
-        hist1s = [[cv2.calcHist([cv2.resize(preds1[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n1)]
-        hist2s = [[cv2.calcHist([cv2.resize(preds2[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n2)]
+        hist1s = [[cv2.calcHist([cv2.cvtColor(cv2.resize(preds1[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n1)]
+        hist2s = [[cv2.calcHist([cv2.cvtColor(cv2.resize(preds2[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n2)]
         for i in range(n1):
             for j in range(n2):
                 match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], hist_mask, cls, match_type='hungarian')
