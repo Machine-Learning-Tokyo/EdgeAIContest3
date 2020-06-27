@@ -10,7 +10,6 @@ import json
 from scipy.optimize import linear_sum_assignment
 from argparse import ArgumentParser
 
-
 class Correspondence():
     def __init__(self, threshold):
         self.cumu_matches = {}
@@ -125,7 +124,7 @@ def compute_iou_bb(pred_bb, true_bb):
         return 0
 
 
-def mota(traj_true, traj_pred, threshold):
+def mota(ans_file, traj_true, traj_pred, threshold):
     corr = Correspondence(threshold = threshold)
     scores = {}
     for gt, pr in zip(traj_true, traj_pred):
@@ -144,6 +143,16 @@ def mota(traj_true, traj_pred, threshold):
             ss = 1 - (r['FP'] + r['FN'] + r['IDSW'])/r['GT']
             print(c, ss)
             print(c, "FP={}, FN={}, IDSW={}, GT={}".format(r["FP"], r["FN"], r["IDSW"], r["GT"]))
+
+            # for global count
+            if ans_file not in GLOBAL_SCORES or c not in GLOBAL_SCORES[ans_file]:
+                GLOBAL_SCORES[ans_file] = {
+                    'Pedestrian': {'FP': 0, 'FN': 0, 'IDSW': 0, 'GT': 0},
+                    'Car': {'FP': 0, 'FN': 0, 'IDSW': 0, 'GT': 0}}
+            GLOBAL_SCORES[ans_file][c]['FP'] += r["FP"]
+            GLOBAL_SCORES[ans_file][c]['FN'] += r["FN"]
+            GLOBAL_SCORES[ans_file][c]['IDSW'] += r["IDSW"]
+            GLOBAL_SCORES[ans_file][c]['GT'] += r["GT"]
             mota += ss
             gt_non_zero += 1
         
@@ -160,7 +169,7 @@ def MOTA(true_seqs, pred_seqs, threshold):
         print(ans_file)
         traj_true = true_seqs[ans_file]
         traj_pred = pred_seqs[ans_file]
-        s += mota(traj_true, traj_pred, threshold)
+        s += mota(ans_file, traj_true, traj_pred, threshold)
         print('\n')
 
     return s/len(ans_files)
@@ -175,6 +184,8 @@ def parse_args():
     return parser.parse_args()
 
 
+GLOBAL_SCORES = {}
+
 def main():
     args = parse_args()
 
@@ -187,6 +198,32 @@ def main():
     threshold = args.threshold
     
     score = MOTA(ans, sub, threshold)
+
+    FP = 0; FN = 0; IDSW = 0; GT = 0
+    for key in GLOBAL_SCORES.keys():
+        if 'Pedestrian' in GLOBAL_SCORES[key].keys():
+            print("{} {} {}".format(key, 'Ped',
+                                    GLOBAL_SCORES[key]['Pedestrian']))
+            FP += GLOBAL_SCORES[key]['Pedestrian']['FP']
+            FN += GLOBAL_SCORES[key]['Pedestrian']['FN']
+            IDSW += GLOBAL_SCORES[key]['Pedestrian']['IDSW']
+            GT += GLOBAL_SCORES[key]['Pedestrian']['GT']
+    print("------------------------")
+    print("PED : FP={} FN={} IDSW={} GT={}".format(FP, FN, IDSW, GT))
+    print("------------------------")
+
+    FP = 0; FN = 0; IDSW = 0; GT = 0
+    for key in GLOBAL_SCORES.keys():
+        if 'Car' in GLOBAL_SCORES[key].keys():
+            print("{} {} {}".format(key, 'Car',
+                                    GLOBAL_SCORES[key]['Pedestrian']))
+            FP += GLOBAL_SCORES[key]['Car']['FP']
+            FN += GLOBAL_SCORES[key]['Car']['FN']
+            IDSW += GLOBAL_SCORES[key]['Car']['IDSW']
+            GT += GLOBAL_SCORES[key]['Car']['GT']
+    print("------------------------")
+    print("CAR : FP={} FN={} IDSW={} GT={}".format(FP, FN, IDSW, GT))
+    print("------------------------")
     print(score)
 
 
