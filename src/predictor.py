@@ -229,6 +229,7 @@ class ScoringService(object):
                 [x1, y1, x2, y2] = bbox_
                 width = x2 - x1
                 height = y2 - y1
+
                 if width * height < 1024:
                     continue
                 if label_ == 0:
@@ -485,6 +486,9 @@ class ScoringService(object):
             pedestrian_list = []
             car_list = []
             for bbox, score, label in zip(clean_bboxes, clean_scores, clean_classes_pred):
+                area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                if area < 1024:
+                    continue
                 if label == 0:  # Pedestrian
                     pedestrian_list.append({"box2d": bbox})
                 elif label == 1:  # Car
@@ -492,7 +496,6 @@ class ScoringService(object):
                 else:
                     print("Irrelevant class detected: {}".format(label))
                     continue
-
             current_frame = {"Car": car_list, "Pedestrian": pedestrian_list}
             pred_tracking = cls.tracker.assign_ids(current_frame, frame)
 
@@ -541,6 +544,8 @@ class ScoringService(object):
         while True:
             start_time = time.time()
             ii += 1
+            if ii > 100:
+                break
             ret, frame = cap.read()
             if not ret:
                 break
