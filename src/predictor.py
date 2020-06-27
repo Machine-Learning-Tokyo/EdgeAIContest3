@@ -18,16 +18,6 @@ class ScoringService(object):
                 1.1 - epoch15 (single img): 0.6358
                 1.2 - epoch15 (two img [orig + flip_lr] + class based nms [0.45, 0.4]): 0.6346
                 1.3 - epoch15 (3 img [orig + left + right] + class based nms [0.45, 0.4]): 0.6422 ***
-
-                2.1 - epoch19 (single img): 0.6219
-
-                3.1 - epoch22 (single img): 0.6284
-
-                4.1 - epoch27 (single img): 0.6314
-                4.2 - epoch27 (two img [orig + flip_lr]): 0.6314
-
-                5.1 - epoch43 (single img): 0.6370 <===
-                5.2 - epoch43 (3 img [orig + left + right] + class based nms [0.45, 0.4]): ?????
         """
         print("get_model called")
         try:
@@ -50,11 +40,7 @@ class ScoringService(object):
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
             cls.conf_score_bias = 0.2
 
-            # cls.model = models.load_model('../model/resnet101_csv_19.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6218
-            # cls.model = models.load_model('../model/resnet101_csv_22.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6284
-            # cls.model = models.load_model('../model/resnet101_csv_27.5classes.all_bboxes.h5.frozen', backbone_name='resnet101') # 0.6313
             cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
-            # cls.model = models.load_model('../model/resnet101_csv_43.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # ???
 
             _, _, _ = cls.model.predict_on_batch(np.zeros((3, 1216, 1936, 3)))
 
