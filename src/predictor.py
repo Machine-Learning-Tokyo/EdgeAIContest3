@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from keras_retinanet import models
 from object_tracker import Tracker
-from keras_retinanet.utils.image import read_image_bgr, preprocess_image, resize_image, adjust_brightness
+from keras_retinanet.utils.image import read_image_bgr, adjust_brightness
 import copy
 import time
 import pdb
@@ -13,27 +13,32 @@ from collections import defaultdict
 class ScoringService(object):
     @classmethod
     def get_model(cls, model_path='../model/resnet50_csv_06.h5.frozen'):
-        """Get model method
- 
-        Args:
-            model_path (str): Path to the trained model directory.
- 
-        Returns:
-            bool: The return value. True for success, False otherwise.
-        
-        Note:
-            - You cannot connect to external network during the prediction,
-              so do not include such process as using urllib.request.
- 
+        """
+        -> postprocess heuristic, no adaptive thr, 2 frames consistence, confidence thresholds = [0.5, 0.5], scale=0.2
+                1.1 - epoch15 (single img): 0.6358
+                1.2 - epoch15 (two img [orig + flip_lr] + class based nms [0.45, 0.4]): 0.6346
+                1.3 - epoch15 (3 img [orig + left + right] + class based nms [0.45, 0.4]): 0.6422 ***
+
+                2.1 - epoch19 (single img): 0.6219
+
+                3.1 - epoch22 (single img): 0.6284
+
+                4.1 - epoch27 (single img): 0.6314
+                4.2 - epoch27 (two img [orig + flip_lr]): 0.6314
+
+                5.1 - epoch43 (single img): 0.6370 <===
+                5.2 - epoch43 (3 img [orig + left + right] + class based nms [0.45, 0.4]): ?????
         """
         print("get_model called")
         try:
             cls.min_no_of_frames = 2  # 2 seems more reasonable than 4 !!!
 
             cls.center_crop = False
-            cls.left_crop = False
-            cls.right_crop = False
-            cls.flip_lr = True
+            cls.left_crop = True
+            cls.right_crop = True
+            cls.flip_lr = False
+            cls.bright_frame = False
+            cls.dark_frame = False
 
             cls.threshold_pedestrian = 0.5
             cls.threshold_car = 0.5
@@ -43,13 +48,15 @@ class ScoringService(object):
             cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
             cls.adaptive_threshold_coefficient = 1  # DON'T USE ADAPTIVE THR !!! =1 means no adaptive thr
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
+            cls.conf_score_bias = 0.2
 
-            # cls.model = models.load_model('../model/resnet101_csv_10.2classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8364, 0.9428
-            # cls.model = models.load_model('../model/resnet101_csv_12.2classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7678, 0.9158
-            cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7713, 0.9244
-            # cls.model = models.load_model('../model/resnet101_csv_19.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7897, 0.9399
-            # cls.model = models.load_model('../model/resnet101_csv_22.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.7998, 0.9421
-            # cls.model = models.load_model('../model/resnet101_csv_10.5classes.big_bboxes.h5.frozen', backbone_name='resnet101')  # 0.8406, 0.9495
+            # cls.model = models.load_model('../model/resnet101_csv_19.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6218
+            # cls.model = models.load_model('../model/resnet101_csv_22.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6284
+            # cls.model = models.load_model('../model/resnet101_csv_27.5classes.all_bboxes.h5.frozen', backbone_name='resnet101') # 0.6313
+            cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
+            # cls.model = models.load_model('../model/resnet101_csv_43.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # ???
+
+            _, _, _ = cls.model.predict_on_batch(np.zeros((3, 1216, 1936, 3)))
 
             return True
         except Exception as e:
@@ -110,10 +117,41 @@ class ScoringService(object):
         return pick
 
     @classmethod
+    def compute_resize_scale(cls, image_shape, min_side=1216, max_side=1936):
+        (rows, cols, _) = image_shape
+        smallest_side = min(rows, cols)
+        scale = min_side / smallest_side
+        largest_side = max(rows, cols)
+        if largest_side * scale > max_side:
+            scale = max_side / largest_side
+        return scale
+
+    @classmethod
+    def resize_image(cls, img, min_side=1216, max_side=1936):
+        scale = cls.compute_resize_scale(img.shape, min_side=min_side, max_side=max_side)
+        img = cv2.resize(img, None, fx=scale, fy=scale)
+        return img, scale
+
+    @classmethod
+    def preprocess_image(cls, x):
+        x = x.astype(np.float32)
+        x -= [103.939, 116.779, 123.68]
+        return x
+
+    @classmethod
     def draw_bboxes(cls, bboxes, image):
         for bbox in bboxes:
             cv2.rectangle(image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0,0,255), 1)
         return image
+
+    @classmethod
+    def apply_local_nms(cls, clean_bboxes, clean_classes_pred, clean_scores):
+        pick_inds = cls.non_max_suppression_with_scores(clean_bboxes, probs=clean_scores, overlapThresh=0.8)
+        clean_bboxes = list(clean_bboxes[i] for i in pick_inds)
+        clean_classes_pred = list(clean_classes_pred[i] for i in pick_inds)
+        clean_scores = list(clean_scores[i] for i in pick_inds)
+
+        return clean_bboxes, clean_classes_pred, clean_scores
 
     @classmethod
     def apply_heuristics(cls, clean_bboxes_, clean_classes_pred_, clean_scores_, offset_y1_1, offset_y2_1):
@@ -131,65 +169,62 @@ class ScoringService(object):
         return clean_bboxes, clean_classes_pred, clean_scores
 
     @classmethod
+    def reject_outliers(cls, data, m=1.5):
+        return abs(data - np.mean(data)) < m * np.std(data)
+
+    @classmethod
     def model_inference(cls, frame, ii):
         try:
-            # detection
-            wc = cls.w // 2
-            hc = cls.h // 2
-            # frame_darker = adjust_brightness(frame, -0.3)
-            # frame_brighter = adjust_brightness(frame, 0.3)
+            frame_darker = adjust_brightness(frame, -0.3)
+            frame_brighter = adjust_brightness(frame, 0.3)
 
-            offset_x1_1 = int(wc - int(cls.w * cls.scales[0]))
-            offset_y1_1 = int(hc - int(cls.h * cls.scales[0]))
-            offset_x2_1 = int(wc + int(cls.w * cls.scales[0]))
-            offset_y2_1 = int(hc + int(cls.h * cls.scales[0]))
+            """ left (center) crop """
+            img_inf2 = frame_brighter[cls.offset_y1_1:cls.offset_y2_1, :cls.offset_x2_1-cls.offset_x1_1]
 
-            # center (center) crop
-            # img_inf1 = frame[offset_y1_1:offset_y2_1, offset_x1_1:offset_x2_1]
-
-            # left (center) crop
-            # img_inf2 = frame_brighter[offset_y1_1:offset_y2_1, :offset_x2_1-offset_x1_1]
-
-            # right (center) crop
-            # img_inf3 = frame_brighter[offset_y1_1:offset_y2_1, offset_x1_1 - offset_x2_1:]
-            # x_offset_3 = cls.w -img_inf3.shape[1]
+            """ right (center) crop """
+            img_inf3 = frame_brighter[cls.offset_y1_1:cls.offset_y2_1, cls.offset_x1_1 - cls.offset_x2_1:]
+            x_offset_3 = cls.w -img_inf3.shape[1]
 
             """ original image """
-            img_inf0 = preprocess_image(frame)
-            # img_inf0, scale0 = resize_image(img_inf0, min_side=1216, max_side=1936)
+            img_inf0 = cls.preprocess_image(frame)
             scale0 = 1
-            """ center crop """
-            # img_inf1 = preprocess_image(img_inf1)
-            # img_inf1, scale1 = resize_image(img_inf1, min_side=1216, max_side=1936)
 
             """ left crop """
-            # img_inf2 = preprocess_image(img_inf2)
-            # img_inf2, scale2 = resize_image(img_inf2, min_side=1216, max_side=1936)
+            img_inf2 = cls.preprocess_image(img_inf2)
+            img_inf2, scale2 = cls.resize_image(img_inf2, min_side=1216, max_side=1936)
 
             """ right crop """
-            # img_inf3 = preprocess_image(img_inf3)
-            # img_inf3, scale3 = resize_image(img_inf3, min_side=1216, max_side=1936)
+            img_inf3 = cls.preprocess_image(img_inf3)
+            img_inf3, scale3 = cls.resize_image(img_inf3, min_side=1216, max_side=1936)
 
             """ flip on x-axis """
-            img_inf4 = img_inf0[:, ::-1, :]
-            scale4 = scale0
+            # img_inf4 = img_inf0[:, ::-1, :]
+            # scale4 = 1
 
-            # batch_list = [img_inf0, img_inf1, img_inf2, img_inf3, img_inf4]
-            # batch_list = [img_inf0, img_inf2, img_inf3, img_inf4]
-            # batch_list = [img_inf0, img_inf2, img_inf3]
+            # img_inf5 = cls.preprocess_image(frame_brighter)
+            # scale5 = 1
+
+            # img_inf6 = cls.preprocess_image(frame_darker)
+            # scale6 = 1
+
+            # batch_list = [img_inf0, img_inf5, img_inf6]
+            batch_list = [img_inf0, img_inf2, img_inf3]
+            # batch_list = [img_inf0, img_inf2, img_inf3, img_inf4, img_inf5, img_inf6]
             # batch_list = [img_inf0]
-            batch_list = [img_inf0, img_inf4]
             boxes, scores, labels = cls.model.predict_on_batch(np.array(batch_list))
 
-            # left_crop_order = 1  # 1
-            # right_crop_order = 2  # 2
-            flip_lr_order = 1  # 3
+            left_crop_order = 1  # 1
+            right_crop_order = 2  # 2
+            # flip_lr_order = 3  # 3
+            # bright_order = 4
+            # dark_order = 5
 
             boxes[0] = boxes[0] / scale0
-            # boxes[1] = boxes[1] / scale1
-            # boxes[left_crop_order] = boxes[left_crop_order] / scale2
-            # boxes[right_crop_order] = boxes[right_crop_order] / scale3
-            boxes[flip_lr_order] = boxes[flip_lr_order] / scale4
+            boxes[left_crop_order] = boxes[left_crop_order] / scale2
+            boxes[right_crop_order] = boxes[right_crop_order] / scale3
+            # boxes[flip_lr_order] = boxes[flip_lr_order] / scale4
+            # boxes[bright_order] = boxes[bright_order] / scale5
+            # boxes[dark_order] = boxes[dark_order] / scale6
 
             clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = [], [], []
             clean_bboxes_car, clean_classes_pred_car, clean_scores_car = [], [], []
@@ -212,37 +247,6 @@ class ScoringService(object):
                 else:
                     continue
 
-
-            if cls.center_crop:  # center (center) crop
-                for bbox_, score_, label_ in zip(boxes[1], scores[1], labels[1]):
-                    if label_ == -1:
-                        break
-
-                    # relax the confidence thresholds for bboxes detected (PEDESTRIAN) on right crop
-                    if (label_ == 0 and score_ >= cls.threshold_pedestrian * 0.9) or \
-                            (label_ == 1 and score_ >= cls.threshold_car):
-                        [x1, y1, x2, y2] = bbox_
-                        x1 += offset_x1_1
-                        y1 += offset_y1_1
-                        x2 += offset_x1_1
-                        y2 += offset_y1_1
-                        width = x2 - x1
-                        height = y2 - y1
-                        if width * height < 1024:
-                            continue
-
-                        if width * height < cls.small_object_area:
-                            x1_ = max(0, x1 - width * cls.expansion)
-                            y1_ = max(0, y1 - height * cls.expansion)
-                            x2_ = min(cls.w, x2 + width * cls.expansion)
-                            y2_ = min(cls.h, y2 + height * cls.expansion)
-                            bbox = [int(x1_), int(y1_), int(x2_), int(y2_)]
-                        else:
-                            bbox = [int(x1), int(y1), int(x2), int(y2)]
-                        clean_bboxes_.append(bbox)
-                        clean_classes_pred_.append(label_)
-                        clean_scores_.append(score_)
-
             clean_bboxes_left_crop_pedestrian, clean_classes_pred_left_crop_pedestrian, clean_scores_left_crop_pedestrian = [], [], []
             clean_bboxes_left_crop_car, clean_classes_pred_left_crop_car, clean_scores_left_crop_car = [], [], []
             if cls.left_crop:  # left (center) crop
@@ -251,8 +255,8 @@ class ScoringService(object):
                         break
 
                     [x1, y1, x2, y2] = bbox_
-                    y1 += offset_y1_1
-                    y2 += offset_y1_1
+                    y1 += cls.offset_y1_1
+                    y2 += cls.offset_y1_1
                     width = x2 - x1
                     height = y2 - y1
                     if width * height < 1024:
@@ -277,9 +281,9 @@ class ScoringService(object):
                         break
                     [x1, y1, x2, y2] = bbox_
                     x1 += x_offset_3
-                    y1 += offset_y1_1
+                    y1 += cls.offset_y1_1
                     x2 += x_offset_3
-                    y2 += offset_y1_1
+                    y2 += cls.offset_y1_1
 
                     width = x2 - x1
                     height = y2 - y1
@@ -301,7 +305,7 @@ class ScoringService(object):
             clean_bboxes_flip_lr_car, clean_classes_pred_flip_lr_car, clean_scores_flip_lr_car = [], [], []
             if cls.flip_lr:  # horizontal flip
                 for bbox_, score_, label_ in zip(boxes[flip_lr_order], scores[flip_lr_order], labels[flip_lr_order]):
-                    if score_ < cls.threshold_car:
+                    if score_ < cls.threshold_car + cls.conf_score_bias:
                         break
                     [x1, y1, x2, y2] = bbox_
                     x2_flip = cls.w - bbox_[0]
@@ -326,58 +330,137 @@ class ScoringService(object):
                     else:
                         continue
 
-            # frame1 = frame.copy()
-            # no_box = len(clean_bboxes_)
-            # drawed1 = cls.draw_bboxes(clean_bboxes_, frame1)
-            # drawed1 = cv2.putText(drawed1, str(no_box), (1000, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-            # cv2.imwrite('/ext/drawed_orig.png', drawed1)
+            clean_bboxes_bright_pedestrian, clean_classes_pred_bright_pedestrian, clean_scores_bright_pedestrian = [], [], []
+            clean_bboxes_bright_car, clean_classes_pred_bright_car, clean_scores_bright_car = [], [], []
+            if cls.bright_frame:
+                for bbox_, score_, label_ in zip(boxes[bright_order], scores[bright_order], labels[bright_order]):
+                    if score_ < cls.threshold_car + cls.conf_score_bias:
+                        break
+                    [x1, y1, x2, y2] = bbox_
 
-            # frame2 = frame.copy()
-            # no_box = len(clean_bboxes_flip_lr)
-            # drawed2 = cls.draw_bboxes(clean_bboxes_flip_lr, frame2)
-            # drawed2 = cv2.putText(drawed2, str(no_box), (1000, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-            # cv2.imwrite('/ext/drawed_flip_lr.png', drawed2)
-            #
-            # frame3 = frame.copy()
-            # no_box = len(clean_bboxes_left_crop)
-            # drawed3 = cls.draw_bboxes(clean_bboxes_left_crop, frame3)
-            # drawed3 = cv2.putText(drawed3, str(no_box), (1000, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-            # cv2.imwrite('/ext/drawed_left_crop.png', drawed3)
-            #
-            # frame4 = frame.copy()
-            # no_box = len(clean_bboxes_right_crop)
-            # drawed4 = cls.draw_bboxes(clean_bboxes_right_crop, frame4)
-            # drawed4 = cv2.putText(drawed4, str(no_box), (1000, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-            # cv2.imwrite('/ext/drawed_right_crop.png', drawed4)
+                    width = x2 - x1
+                    height = y2 - y1
+                    if width * height < 1024:
+                        continue
 
+                    if label_ == 0:
+                        clean_bboxes_bright_pedestrian.append([int(x1), int(y1), int(x2), int(y2)])
+                        clean_classes_pred_bright_pedestrian.append(label_)
+                        clean_scores_bright_pedestrian.append(score_)
+                    elif label_ == 1:
+                        clean_bboxes_bright_car.append([int(x1), int(y1), int(x2), int(y2)])
+                        clean_classes_pred_bright_car.append(label_)
+                        clean_scores_bright_car.append(score_)
+                    else:
+                        continue
+
+            clean_bboxes_dark_pedestrian, clean_classes_pred_dark_pedestrian, clean_scores_dark_pedestrian = [], [], []
+            clean_bboxes_dark_car, clean_classes_pred_dark_car, clean_scores_dark_car = [], [], []
+            if cls.dark_frame:
+                for bbox_, score_, label_ in zip(boxes[dark_order], scores[dark_order], labels[dark_order]):
+                    if score_ < cls.threshold_car + cls.conf_score_bias:
+                        break
+                    [x1, y1, x2, y2] = bbox_
+
+                    width = x2 - x1
+                    height = y2 - y1
+                    if width * height < 1024:
+                        continue
+
+                    if label_ == 0:
+                        clean_bboxes_dark_pedestrian.append([int(x1), int(y1), int(x2), int(y2)])
+                        clean_classes_pred_dark_pedestrian.append(label_)
+                        clean_scores_dark_pedestrian.append(score_)
+                    elif label_ == 1:
+                        clean_bboxes_dark_car.append([int(x1), int(y1), int(x2), int(y2)])
+                        clean_classes_pred_dark_car.append(label_)
+                        clean_scores_dark_car.append(score_)
+                    else:
+                        continue
+
+            """ merge: overall + flip_lr """
             if len(clean_bboxes_flip_lr_pedestrian) > 0:
                 clean_bboxes_pedestrian += clean_bboxes_flip_lr_pedestrian
                 clean_classes_pred_pedestrian += clean_classes_pred_flip_lr_pedestrian
                 clean_scores_pedestrian += clean_scores_flip_lr_pedestrian
+                clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = cls.apply_local_nms(clean_bboxes_pedestrian,
+                                                                                                                      clean_classes_pred_pedestrian,
+                                                                                                                      clean_scores_pedestrian)
             if len(clean_bboxes_flip_lr_car) > 0:
                 clean_bboxes_car += clean_bboxes_flip_lr_car
                 clean_classes_pred_car += clean_classes_pred_flip_lr_car
                 clean_scores_car += clean_scores_flip_lr_car
+                clean_bboxes_car, clean_classes_pred_car, clean_scores_car = cls.apply_local_nms(clean_bboxes_car,
+                                                                                                 clean_classes_pred_car,
+                                                                                                 clean_scores_car)
 
+            """ merge: overall + left_crop """
             if len(clean_bboxes_left_crop_pedestrian) > 0:
                 clean_bboxes_pedestrian += clean_bboxes_right_crop_pedestrian
                 clean_classes_pred_pedestrian += clean_classes_pred_right_crop_pedestrian
                 clean_scores_pedestrian += clean_scores_right_crop_pedestrian
+                clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = cls.apply_local_nms(clean_bboxes_pedestrian,
+                                                                                                                      clean_classes_pred_pedestrian,
+                                                                                                                      clean_scores_pedestrian)
             if len(clean_bboxes_left_crop_pedestrian) > 0:
                 clean_bboxes_car += clean_bboxes_right_crop_car
                 clean_classes_pred_car += clean_classes_pred_right_crop_car
                 clean_scores_car += clean_scores_right_crop_car
+                clean_bboxes_car, clean_classes_pred_car, clean_scores_car = cls.apply_local_nms(clean_bboxes_car,
+                                                                                                 clean_classes_pred_car,
+                                                                                                 clean_scores_car)
 
+            """ merge: overall + right_crop """
             if len(clean_bboxes_right_crop_pedestrian) > 0:
                 clean_bboxes_pedestrian += clean_bboxes_left_crop_pedestrian
                 clean_classes_pred_pedestrian += clean_classes_pred_left_crop_pedestrian
                 clean_scores_pedestrian += clean_scores_left_crop_pedestrian
+                clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = cls.apply_local_nms(clean_bboxes_pedestrian,
+                                                                                                                      clean_classes_pred_pedestrian,
+                                                                                                                      clean_scores_pedestrian)
             if len(clean_bboxes_right_crop_car) > 0:
                 clean_bboxes_car += clean_bboxes_left_crop_car
                 clean_classes_pred_car += clean_classes_pred_left_crop_car
                 clean_scores_car += clean_scores_left_crop_car
+                clean_bboxes_car, clean_classes_pred_car, clean_scores_car = cls.apply_local_nms(clean_bboxes_car,
+                                                                                                 clean_classes_pred_car,
+                                                                                                 clean_scores_car)
 
-            if cls.center_crop or cls.left_crop or cls.right_crop or cls.flip_lr:
+            """ merge: overall + bright """
+            if len(clean_bboxes_bright_pedestrian) > 0:
+                clean_bboxes_pedestrian += clean_bboxes_bright_pedestrian
+                clean_classes_pred_pedestrian += clean_classes_pred_bright_pedestrian
+                clean_scores_pedestrian += clean_scores_bright_pedestrian
+                clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = cls.apply_local_nms(clean_bboxes_pedestrian,
+                                                                                                                      clean_classes_pred_pedestrian,
+                                                                                                                      clean_scores_pedestrian)
+            if len(clean_bboxes_bright_car) > 0:
+                clean_bboxes_car += clean_bboxes_bright_car
+                clean_classes_pred_car += clean_classes_pred_bright_car
+                clean_scores_car += clean_scores_bright_car
+
+                clean_bboxes_car, clean_classes_pred_car, clean_scores_car = cls.apply_local_nms(clean_bboxes_car,
+                                                                                                 clean_classes_pred_car,
+                                                                                                 clean_scores_car)
+
+            """ merge: overall + dark """
+            if len(clean_bboxes_dark_pedestrian) > 0:
+                clean_bboxes_pedestrian += clean_bboxes_dark_pedestrian
+                clean_classes_pred_pedestrian += clean_classes_pred_dark_pedestrian
+                clean_scores_pedestrian += clean_scores_dark_pedestrian
+                clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = cls.apply_local_nms(clean_bboxes_pedestrian,
+                                                                                                                      clean_classes_pred_pedestrian,
+                                                                                                                      clean_scores_pedestrian)
+            if len(clean_bboxes_dark_car) > 0:
+                clean_bboxes_car += clean_bboxes_dark_car
+                clean_classes_pred_car += clean_classes_pred_dark_car
+                clean_scores_car += clean_scores_dark_car
+                clean_bboxes_car, clean_classes_pred_car, clean_scores_car = cls.apply_local_nms(clean_bboxes_car,
+                                                                                                 clean_classes_pred_car,
+                                                                                                 clean_scores_car)
+
+            """ global non max suppression """
+            if cls.center_crop or cls.left_crop or cls.right_crop or cls.flip_lr or cls.dark_frame or cls.bright_frame:
                 pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian, probs=clean_scores_pedestrian, overlapThresh=0.45)
                 pick_inds_car = cls.non_max_suppression_with_scores(clean_bboxes_car, probs=clean_scores_car, overlapThresh=0.4)
 
@@ -397,24 +480,18 @@ class ScoringService(object):
                 clean_classes_pred = clean_classes_pred_pedestrian + clean_classes_pred_car
                 clean_scores = clean_scores_pedestrian + clean_scores_car
 
-            # frame5 = frame.copy()
-            # no_box = len(clean_bboxes)
-            # drawed5 = cls.draw_bboxes(clean_bboxes, frame5)
-            # drawed5 = cv2.putText(drawed5, str(no_box), (1000, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-            # cv2.imwrite('/ext/drawed_nms.png', drawed5)
-
             if cls.apply_heuristic_post_processing:
                 clean_bboxes, clean_classes_pred, clean_scores = cls.apply_heuristics(clean_bboxes,
                                                                                       clean_classes_pred,
                                                                                       clean_scores,
-                                                                                      offset_y1_1,
-                                                                                      offset_y2_1)
+                                                                                      cls.offset_y1_1,
+                                                                                      cls.offset_y2_1)
 
-            # frame6 = frame.copy()
+            # frame_ = frame.copy()
             # no_box = len(clean_bboxes)
-            # drawed6 = cls.draw_bboxes(clean_bboxes, frame6)
-            # drawed6 = cv2.putText(drawed6, str(no_box), (1000, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
-            # cv2.imwrite('/ext/drawed_nms_heuristic.png', drawed6)
+            # drawed_ = cls.draw_bboxes(clean_bboxes, frame_)
+            # drawed_ = cv2.putText(drawed_, str(no_box), (1000, 100), cv2.FONT_HERSHEY_SIMPLEX, 3, 255, 3)
+            # cv2.imwrite('/ext/final.png', drawed_)
             # pdb.set_trace()
 
             pedestrian_list = []
@@ -460,12 +537,19 @@ class ScoringService(object):
 
         predictions = []
         cap = cv2.VideoCapture(input)
-        cls.w, cls.h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(
-            cv2.CAP_PROP_FRAME_HEIGHT)
+        cls.w, cls.h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        wc = cls.w // 2
+        hc = cls.h // 2
+        cls.offset_x1_1 = int(wc - int(cls.w * cls.scales[0]))
+        cls.offset_y1_1 = int(hc - int(cls.h * cls.scales[0]))
+        cls.offset_x2_1 = int(wc + int(cls.w * cls.scales[0]))
+        cls.offset_y2_1 = int(hc + int(cls.h * cls.scales[0]))
+
         cls.tracker = Tracker((cls.w, cls.h))
         prev_prediction = {}
         fname = os.path.basename(input)
         ii = 0
+        break_time = time.time()
         while True:
             start_time = time.time()
             ii += 1
@@ -486,13 +570,13 @@ class ScoringService(object):
                 predictions.append(prev_prediction)
 
             if (ii % 10 == 0) :
-                print("Frames processed : {} ({})".format(ii, time.time() - start_time))
+                print("Frames processed : {} ({})".format(ii, start_time - break_time))
+                break_time = time.time()
         cap.release()
         predictions = cls.filter_predictions(predictions)
         end_time = time.time()
-        print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(
-            fname, ii, end_time - start_time))
-        print("-----------------------------")
+        # print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(fname, ii, end_time - start_time))
+        # print("-----------------------------")
         return {fname: predictions}
     
     @classmethod
