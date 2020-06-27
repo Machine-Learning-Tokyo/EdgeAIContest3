@@ -22,27 +22,36 @@ class ScoringService(object):
         print("get_model called")
         try:
             cls.min_no_of_frames = 2  # 2 seems more reasonable than 4 !!!
-
-            cls.center_crop = False
+            """
+            1. left + right
+            2. flip_lr
+            3. dark + bright
+            
+                4. cls.pedestrian_nms_thr (> 0.45) if FP is large then increase this
+                5. cls.car_nms_thr (less important)
+                6. cls.conf_score_bias (less important)
+            """
             cls.left_crop = True
             cls.right_crop = True
             cls.flip_lr = False
             cls.bright_frame = False
             cls.dark_frame = False
+            cls.pedestrian_nms_thr = 0.45
+            cls.car_nms_thr = 0.4
+            cls.conf_score_bias = 0.2
+            # batch_size, 1216, 1936, 3
+            # _, _, _ = cls.model.predict_on_batch(np.zeros((3, 1216, 1936, 3)))
 
-            cls.threshold_pedestrian = 0.5
-            cls.threshold_car = 0.5
-            cls.expansion = 0
-            cls.scales = [0.2]
+            cls.threshold_pedestrian = 0.5  # DO NOT CHANGE
+            cls.threshold_car = 0.5  # DO NOT CHANGE
+            cls.expansion = 0  # DO NOT USE
+            cls.scales = [0.2]  #  DO NOT CHANGE
             cls.small_object_area = 2000000
             cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
             cls.adaptive_threshold_coefficient = 1  # DON'T USE ADAPTIVE THR !!! =1 means no adaptive thr
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
-            cls.conf_score_bias = 0.2
 
             cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
-
-            _, _, _ = cls.model.predict_on_batch(np.zeros((3, 1216, 1936, 3)))
 
             return True
         except Exception as e:
@@ -164,10 +173,10 @@ class ScoringService(object):
             frame_darker = adjust_brightness(frame, -0.3)
             frame_brighter = adjust_brightness(frame, 0.3)
 
-            """ left (center) crop """
+            """ left crop """
             img_inf2 = frame_brighter[cls.offset_y1_1:cls.offset_y2_1, :cls.offset_x2_1-cls.offset_x1_1]
 
-            """ right (center) crop """
+            """ right crop """
             img_inf3 = frame_brighter[cls.offset_y1_1:cls.offset_y2_1, cls.offset_x1_1 - cls.offset_x2_1:]
             x_offset_3 = cls.w -img_inf3.shape[1]
 
@@ -202,8 +211,8 @@ class ScoringService(object):
             left_crop_order = 1  # 1
             right_crop_order = 2  # 2
             # flip_lr_order = 3  # 3
-            # bright_order = 4
-            # dark_order = 5
+            # bright_order = 1  # 4
+            # dark_order = 2  # 5
 
             boxes[0] = boxes[0] / scale0
             boxes[left_crop_order] = boxes[left_crop_order] / scale2
@@ -446,9 +455,9 @@ class ScoringService(object):
                                                                                                  clean_scores_car)
 
             """ global non max suppression """
-            if cls.center_crop or cls.left_crop or cls.right_crop or cls.flip_lr or cls.dark_frame or cls.bright_frame:
-                pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian, probs=clean_scores_pedestrian, overlapThresh=0.45)
-                pick_inds_car = cls.non_max_suppression_with_scores(clean_bboxes_car, probs=clean_scores_car, overlapThresh=0.4)
+            if cls.left_crop or cls.right_crop or cls.flip_lr or cls.dark_frame or cls.bright_frame:
+                pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian, probs=clean_scores_pedestrian, overlapThresh=cls.pedestrian_nms_thr)
+                pick_inds_car = cls.non_max_suppression_with_scores(clean_bboxes_car, probs=clean_scores_car, overlapThresh=cls.car_nms_thr)
 
                 clean_bboxes_pedestrian = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
                 clean_classes_pred_pedestrian = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
@@ -472,13 +481,6 @@ class ScoringService(object):
                                                                                       clean_scores,
                                                                                       cls.offset_y1_1,
                                                                                       cls.offset_y2_1)
-
-            # frame_ = frame.copy()
-            # no_box = len(clean_bboxes)
-            # drawed_ = cls.draw_bboxes(clean_bboxes, frame_)
-            # drawed_ = cv2.putText(drawed_, str(no_box), (1000, 100), cv2.FONT_HERSHEY_SIMPLEX, 3, 255, 3)
-            # cv2.imwrite('/ext/final.png', drawed_)
-            # pdb.set_trace()
 
             pedestrian_list = []
             car_list = []
