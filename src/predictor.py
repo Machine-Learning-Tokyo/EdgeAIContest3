@@ -544,8 +544,6 @@ class ScoringService(object):
         while True:
             start_time = time.time()
             ii += 1
-            if ii > 100:
-                break
             ret, frame = cap.read()
             if not ret:
                 break
