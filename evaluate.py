@@ -216,7 +216,7 @@ def main():
     for key in GLOBAL_SCORES.keys():
         if 'Car' in GLOBAL_SCORES[key].keys():
             print("{} {} {}".format(key, 'Car',
-                                    GLOBAL_SCORES[key]['Pedestrian']))
+                                    GLOBAL_SCORES[key]['Car']))
             FP += GLOBAL_SCORES[key]['Car']['FP']
             FN += GLOBAL_SCORES[key]['Car']['FN']
             IDSW += GLOBAL_SCORES[key]['Car']['IDSW']
