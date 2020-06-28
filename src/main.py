@@ -5,6 +5,8 @@ import json
 import time
 from predictor import ScoringService
 
+exp_name = "flip_lr.aspect."
+
 if ScoringService.get_model():
     start_time = time.time()
     target_videos = [
@@ -24,7 +26,7 @@ if ScoringService.get_model():
         print("Train_file = {}".format(train_file))
         preds_json = ScoringService.predict(
             "/ext/signate_edge_ai/train_videos/{}.mp4".format(train_file))
-        with open('{}.preds.json'.format(train_file), 'w+') as output_json_file:
+        with open(exp_name + '{}.preds.json'.format(train_file), 'w+') as output_json_file:
             json.dump(preds_json, output_json_file)
         
         key = "{}.mp4".format(train_file)
@@ -35,7 +37,7 @@ if ScoringService.get_model():
         print("-----------------------------")
 
     print("Outputing combined predictions ")
-    with open('prediction.json', 'w+') as output_combined_json_file:
+    with open(exp_name + 'prediction.json', 'w+') as output_combined_json_file:
         json.dump(combined_prediction_json, output_combined_json_file)
     end_time = time.time()
     print("[PERFORMANCE] ScoringService All_Videos {} Total_Time = {}".format(
