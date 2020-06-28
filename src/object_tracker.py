@@ -420,7 +420,9 @@ class Tracker:
                 bb[3] = min(self.image_size[1]-1, bb[3])
                 bb = [min(bb[0], bb[2]), min(bb[1], bb[3]), max(bb[0], bb[2]), max(bb[1], bb[3])]
                 box['image'] = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
-                im = cv2.cvtColor(cv2.resize(box['image'], (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)
+                im = cv2.bilateralFilter(box['image'], 7, 40, 40)
+                im = cv2.bilateralFilter(im, 7, 40, 40)
+                im = cv2.cvtColor(cv2.resize(im, (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)
                 im1 = im[:64, :64, :]
                 im2 = im[:64, 64:, :]
                 im3 = im[64:, :64, :]
