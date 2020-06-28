@@ -18,5 +18,5 @@ cp -v src/object_tracker.py                 mlt_submission/src/
 
 if [ -f mlt_submission.zip ]; then
     rm mlt_submission.zip
-    zip -q -r mlt_submission_`date +"%m%d%H%m"`.zip mlt_submission
 fi
+zip -q -r mlt_submission.zip mlt_submission
