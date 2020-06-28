@@ -35,20 +35,19 @@ class Tracker:
 
         # cost weights for hungarian matching
         self.h_max_frame_in = {'Car': 6, 'Pedestrian': 7}
-        self.h_cost_weight = {'Car': [0.137, 1.44], 'Pedestrian': [0.0378, 1.14]} # [a, b]: a is for box distance, b is for box size difference
-        self.h_sim_weight = {'Car': 0.92, 'Pedestrian': 1.01} # cost for two boxes' image similarity
-        self.h_occ_weight = {'Car': 0.86, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
+        self.h_cost_weight = {'Car': [0.135, 1.44], 'Pedestrian': [0.0375, 1.14]} # [a, b]: a is for box distance, b is for box size difference
+        self.h_sim_weight = {'Car': 1.13, 'Pedestrian': 0.99} # cost for two boxes' image similarity
+        self.h_occ_weight = {'Car': 0.85, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
         self.h_frame_in_weight = {'Car': 0.14, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
 
-    def calculate_cost(self, box1, box2, hist1, hist2, hist_mask, cls='Car', match_type='full'):
+    def calculate_cost(self, box1, box2, hist1, hist2, cls='Car', match_type='full'):
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
-        hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(3)]
+        hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(len(hist1))]
         hist_score = mean(hist_score)
-        # hist_score = min(hist_score)
 
         cnt1 = [box1[0]+w1/2, box1[1]+h1/2]
         cnt2 = [box2[0]+w2/2, box2[1]+h2/2]
@@ -73,20 +72,37 @@ class Tracker:
 
         # calculate the costs for each combination of objects between the previous frame and the current frame in advance
         match_costs = [[0]*n2 for _ in range(n1)]
-        hist_mask = None
-        if cls=='Pedestrian':
-            hist_size = 128
-            hist_mask = np.ones((hist_size, hist_size), np.uint8)
-            for y in range(hist_size//2):
-                hist_mask[y, :hist_size//8*3-y*3//4] = 0
-                hist_mask[y, hist_size//8*5+y*3//4:] = 0
-                hist_mask[hist_size//2+y, :y*3//4] = 0
-                hist_mask[hist_size//2+y, hist_size-y*3//4:] = 0
-        hist1s = [[cv2.calcHist([cv2.cvtColor(cv2.resize(preds1[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n1)]
-        hist2s = [[cv2.calcHist([cv2.cvtColor(cv2.resize(preds2[i]['image'], (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)], [c], hist_mask, [128], [0, 256]) for c in range(3)] for i in range(n2)]
+        hist1s = [preds1[i]['hist'] for i in range(n1)]
+        hist2s = [preds2[i]['hist'] for i in range(n2)]
+        # hist1s = []
+        # for i in range(n1):
+            # id1 = preds1[i]['id']
+            # hists = []
+            # for j in range(min(10, len(self.predictions))):
+                # if cls not in self.predictions[-j-1].keys():
+                    # continue
+                # p1 = self.predictions[-j-1][cls]
+                # if id1 in map(lambda p: p['id'], p1):
+                    # pp = list(filter(lambda p: p['id']==id1, p1))[0]
+                    # if pp['occlusion']>0:
+                        # continue
+                    # hists.append(pp['hist'])
+                # else:
+                    # break
+            # if len(hists)==0:
+                # hists.append(preds1[i]['hist'])
+            # hists = hists[:2]
+            # # hist = [sum([hists[k][j] for k in range(len(hists))])/len(hists) for j in range(3)]
+            # # d = 0
+            # # for hist in hists:
+                # # d += 1/hist[1]
+            # hist = [sum([hists[k][j]*(len(hists)-k) for k in range(len(hists))])/(len(hists)*(len(hists)+1)/2) for j in range(3)]
+            # # hist = [sum([hists[k][0][j]/hists[k][1] for k in range(len(hists))])/d for j in range(3)]
+            # hist1s.append(hist)
+
         for i in range(n1):
             for j in range(n2):
-                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], hist_mask, cls, match_type='hungarian')
+                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls, match_type='hungarian')
         best_box_map = []
         min_cost = 1e16
         no_update = 0
@@ -367,6 +383,20 @@ class Tracker:
 
 
     def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2]}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2]}]}
+
+        hist_size = 128
+        hist_mask = {'Car': np.ones((hist_size, hist_size), np.uint8), 'Pedestrian': np.ones((hist_size, hist_size), np.uint8)}
+        for y in range(hist_size//2):
+            hist_mask['Pedestrian'][y, :hist_size//8*3-y*3//4] = 0
+            hist_mask['Pedestrian'][y, hist_size//8*5+y*3//4:] = 0
+            hist_mask['Pedestrian'][hist_size//2+y, :y*3//4] = 0
+            hist_mask['Pedestrian'][hist_size//2+y, hist_size-y*3//4:] = 0
+        for y in range(hist_size//4):
+            hist_mask['Car'][y, :hist_size//4-y] = 0
+            hist_mask['Car'][y, hist_size//4*3+y:] = 0
+            hist_mask['Car'][hist_size//4*3+y, :y] = 0
+            hist_mask['Car'][hist_size//4*3+y, hist_size-y:] = 0
+
         pred = copy.deepcopy(pred)
         for cls, boxes in pred.items():
 
@@ -390,6 +420,19 @@ class Tracker:
                 bb[3] = min(self.image_size[1]-1, bb[3])
                 bb = [min(bb[0], bb[2]), min(bb[1], bb[3]), max(bb[0], bb[2]), max(bb[1], bb[3])]
                 box['image'] = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
+                im = cv2.cvtColor(cv2.resize(box['image'], (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)
+                im1 = im[:64, :64, :]
+                im2 = im[:64, 64:, :]
+                im3 = im[64:, :64, :]
+                im4 = im[64:, 64:, :]
+                im5 = im[32:-32, 32:-32]
+                hist1 = [cv2.calcHist([im1], [c], hist_mask[cls][:64, :64], [64], [0, 256]) for c in range(3)]
+                hist2 = [cv2.calcHist([im2], [c], hist_mask[cls][:64, 64:], [64], [0, 256]) for c in range(3)]
+                hist3 = [cv2.calcHist([im3], [c], hist_mask[cls][64:, :64], [64], [0, 256]) for c in range(3)]
+                hist4 = [cv2.calcHist([im4], [c], hist_mask[cls][64:, 64:], [64], [0, 256]) for c in range(3)]
+                hist5 = [cv2.calcHist([im5], [c], hist_mask[cls][32:-32, 32:-32], [64], [0, 256]) for c in range(3)]
+                hist = hist1 + hist2 + hist3 + hist4 + hist5
+                box['hist'] = hist
 
             for p in last_preds:
                 bb = p['box2d']
@@ -452,7 +495,7 @@ class Tracker:
                     for i in range(len(cnts)):
                         if cnts[i] is not None:
                             ts.append(i)
-                    if n_sample<=4:
+                    if n_sample<=3:
                         # linear regression
                         xs = [cnt[0] for cnt in cnts if cnt is not None]
                         ys = [cnt[1] for cnt in cnts if cnt is not None]
@@ -498,7 +541,7 @@ class Tracker:
                 if area_inside <=area*self.frame_out_thresh[cls]:
                     n_frame_out += 1
                     continue
-                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image']})
+                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']})
 
             # match objects in the previous frame and the current frame and assign IDs
             box_map, cost = self.hungarian_match(adjusted_preds, boxes, cls)
@@ -532,14 +575,14 @@ class Tracker:
                     mv = [0, 0]
                     scale = [1, 1]
                 bb = pred[cls][i]['box2d']
-                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': image[int(bb[1]):int(bb[3])+1, int(bb[0]):int(bb[2])+1, :]}
+                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
 
             # generate next prediction data
             for i in range(len(box_map)):
                 # discard too old occluded objects kept in the tracker
                 if box_map[i]==-1 and adjusted_preds[i]['occlusion']<self.max_occ_frames:
                     bb = adjusted_preds[i]['box2d']
-                    pred[cls].append({'box2d': bb, 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': image[int(bb[1]):int(bb[3])+1, int(bb[0]):int(bb[2])+1, :]})
+                    pred[cls].append({'box2d': bb, 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']})
 
         # keep object prediction information in the tracker
         self.predictions.append(pred)
