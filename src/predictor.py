@@ -39,8 +39,6 @@ class ScoringService(object):
             cls.pedestrian_nms_thr = 0.4
             cls.car_nms_thr = 0.35
             cls.conf_score_bias = 0.2
-            # batch_size, 1216, 1936, 3
-            _, _, _ = cls.model.predict_on_batch(np.zeros((2, 1216, 1936, 3)))
 
             cls.threshold_pedestrian = 0.5  # DO NOT CHANGE
             cls.threshold_car = 0.5  # DO NOT CHANGE
@@ -52,6 +50,9 @@ class ScoringService(object):
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
 
             cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
+            # batch_size, 1216, 1936, 3
+            # _, _, _ = cls.model.predict_on_batch(np.zeros((2, 1216, 1936, 3)))
+
             cls.prev_frame_pedestrian_number = None
             return True
         except Exception as e:
