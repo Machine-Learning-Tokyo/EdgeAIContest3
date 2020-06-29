@@ -22,26 +22,16 @@ class Tracker:
         self.box_area_thresh = 1024 # ignore bounding boxes with area less than this threshold(px)
         self.last_id = -1 # the biggest ID already assigned so far
         self.total_cost = 0
-
-        # cost weights for full matching (deprecated)
-        self.max_patterns = max_patterns # max number of matching patterns to search
-        self.max_time = max_time # max time that can be used for matching
-        self.max_frame_in = {'Car': 4, 'Pedestrian': 5} # max number of objects that can newly frame-in
-        self.cost_thresh1 = {'Car': 0.35, 'Pedestrian': 0.83} # for reducing the number of patterns to search
-        self.cost_thresh2 = {'Car': 0.71, 'Pedestrian': 1.44} # for reducing the number of patterns to search
-        self.cost_weight = {'Car': [0.5, 1.21], 'Pedestrian': [0.2, 1.09]} # [a, b]: a is for box distance, b is for box size difference
-        self.sim_weight = {'Car': 1.47, 'Pedestrian': 1.76} # cost for two boxes' image similarity
-        self.occ_weight = {'Car': 0.84, 'Pedestrian': 1.35}
+        self.max_frame_in = {'Car': 6, 'Pedestrian': 7}
 
         # cost weights for hungarian matching
-        self.h_max_frame_in = {'Car': 6, 'Pedestrian': 7}
-        self.h_cost_weight = {'Car': [0.135, 1.44], 'Pedestrian': [0.0375, 1.14]} # [a, b]: a is for box distance, b is for box size difference
-        self.h_sim_weight = {'Car': 1.13, 'Pedestrian': 0.99} # cost for two boxes' image similarity
-        self.h_occ_weight = {'Car': 0.85, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
-        self.h_frame_in_weight = {'Car': 0.14, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
+        self.cost_weight = {'Car': [0.135, 1.44], 'Pedestrian': [0.0375, 1.14]} # [a, b]: a is for box distance, b is for box size difference
+        self.sim_weight = {'Car': 1.13, 'Pedestrian': 0.99} # cost for two boxes' image similarity
+        self.occ_weight = {'Car': 0.85, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
+        self.frame_in_weight = {'Car': 0.14, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
 
-    def calculate_cost(self, box1, box2, hist1, hist2, cls='Car', match_type='full'):
+    def calculate_cost(self, box1, box2, hist1, hist2, cls='Car'):
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
@@ -51,16 +41,10 @@ class Tracker:
 
         cnt1 = [box1[0]+w1/2, box1[1]+h1/2]
         cnt2 = [box2[0]+w2/2, box2[1]+h2/2]
-        if match_type=='full':
-            alpha = abs(cnt1[0]-cnt2[0])/(w1+w2) + abs(cnt1[1]-cnt2[1])/(h1+h2) # to be deprecated
-        else:
-            alpha = ((cnt1[0]-cnt2[0])/(w1+w2))**2 + ((cnt1[1]-cnt2[1])/(h1+h2))**2 # cost for distance between two objects
+        alpha = ((cnt1[0]-cnt2[0])/(w1+w2))**2 + ((cnt1[1]-cnt2[1])/(h1+h2))**2 # cost for distance between two objects
         beta = (w1+w2)/(2*np.sqrt(w1*w2)) * (h1+h2)/(2*np.sqrt(h1*h2)) # cost for size difference between two objects
 
-        if match_type=='full':
-            cost = pow(alpha, self.cost_weight[cls][0]) * pow(beta, self.cost_weight[cls][1]) * pow(2, (0.5-hist_score)*self.sim_weight[cls])
-        else:
-            cost = pow(alpha, self.h_cost_weight[cls][0]) * pow(beta, self.h_cost_weight[cls][1]) * pow(2, (0.5-hist_score)*self.h_sim_weight[cls])
+        cost = pow(alpha, self.cost_weight[cls][0]) * pow(beta, self.cost_weight[cls][1]) * pow(2, (0.5-hist_score)*self.sim_weight[cls])
         return cost
 
 
@@ -74,39 +58,14 @@ class Tracker:
         match_costs = [[0]*n2 for _ in range(n1)]
         hist1s = [preds1[i]['hist'] for i in range(n1)]
         hist2s = [preds2[i]['hist'] for i in range(n2)]
-        # hist1s = []
-        # for i in range(n1):
-            # id1 = preds1[i]['id']
-            # hists = []
-            # for j in range(min(10, len(self.predictions))):
-                # if cls not in self.predictions[-j-1].keys():
-                    # continue
-                # p1 = self.predictions[-j-1][cls]
-                # if id1 in map(lambda p: p['id'], p1):
-                    # pp = list(filter(lambda p: p['id']==id1, p1))[0]
-                    # if pp['occlusion']>0:
-                        # continue
-                    # hists.append(pp['hist'])
-                # else:
-                    # break
-            # if len(hists)==0:
-                # hists.append(preds1[i]['hist'])
-            # hists = hists[:2]
-            # # hist = [sum([hists[k][j] for k in range(len(hists))])/len(hists) for j in range(3)]
-            # # d = 0
-            # # for hist in hists:
-                # # d += 1/hist[1]
-            # hist = [sum([hists[k][j]*(len(hists)-k) for k in range(len(hists))])/(len(hists)*(len(hists)+1)/2) for j in range(3)]
-            # # hist = [sum([hists[k][0][j]/hists[k][1] for k in range(len(hists))])/d for j in range(3)]
-            # hist1s.append(hist)
 
         for i in range(n1):
             for j in range(n2):
-                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls, match_type='hungarian')
+                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls)
         best_box_map = []
         min_cost = 1e16
         no_update = 0
-        for n_occ in range(max(n1-n2, 0), max(n1-n2+self.h_max_frame_in[cls]+1, min(n2, self.h_max_frame_in[cls]))):
+        for n_occ in range(max(n1-n2, 0), max(n1-n2+self.max_frame_in[cls]+1, min(n2, self.max_frame_in[cls]))):
             prev_min_cost = min_cost
             n_match = n1 - n_occ
             if n_match>n2 or n_match<0:
@@ -114,7 +73,7 @@ class Tracker:
             n_frame_in = n2-n_match
             fcosts = [c[:] for c in match_costs]
             for i in range(n_frame_in):
-                fcosts.append([self.h_frame_in_weight[cls]]*n2)
+                fcosts.append([self.frame_in_weight[cls]]*n2)
             for i in range(n_occ):
                 for j in range(len(fcosts)):
                     if j<n1:
@@ -134,11 +93,11 @@ class Tracker:
                                         y2 = min(bb1[3], bb2[3]) - bb1[1]
                                         flags[int(y1):int(y2), int(x1):int(x2)] = True
                             occ_rate = np.count_nonzero(flags) / (flags.shape[0]*flags.shape[1])
-                            fcosts[j].append(self.h_occ_weight[cls]*(1-occ_rate))
+                            fcosts[j].append(self.occ_weight[cls]*(1-occ_rate))
                         else:
-                            fcosts[j].append(self.h_occ_weight[cls])
+                            fcosts[j].append(self.occ_weight[cls])
                     else:
-                        fcosts[j].append(self.h_occ_weight[cls])
+                        fcosts[j].append(self.occ_weight[cls])
             tcosts = np.array(fcosts)
             tcosts = (tcosts*100000).astype(np.int)
 
@@ -280,109 +239,7 @@ class Tracker:
         return best_box_map, min_cost
 
 
-    # find the optimal matching between objects in the previous frame (+occluded objects in the past frames) and objects in the current frame
-    # using exhoustive search with pruning
-    # to be deprecated
-    def match(self, preds1, preds2, cls='Car'):
-        n1 = len(preds1) # number of objects in the previous frame
-        n2 = len(preds2) # number of objects in the current frame
-
-        # calculate the costs for each combination of objects between the previous frame and the current frame in advance
-        match_costs = [[0]*n2 for _ in range(n1)]
-        cands = [[] for _ in range(n1)]
-        all_cands = [[] for _ in range(n1)]
-        hist1s = [[cv2.calcHist([cv2.resize(preds1[i]['image'], (64, 64), interpolation=cv2.INTER_CUBIC)], [c], None, [64], [0, 256]) for c in range(3)] for i in range(n1)]
-        hist2s = [[cv2.calcHist([cv2.resize(preds2[i]['image'], (64, 64), interpolation=cv2.INTER_CUBIC)], [c], None, [64], [0, 256]) for c in range(3)] for i in range(n2)]
-        for i in range(n1):
-            for j in range(n2):
-                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls)
-                cands[i].append(j)
-                all_cands[i].append(j)
-        for i in range(n1):
-            all_cands[i].sort(key=lambda x: match_costs[i][x])
-            tmp = list(filter(lambda x: match_costs[i][x]<=self.cost_thresh1[cls], cands[i]))
-            if len(tmp)>=3:
-                cands[i] = tmp
-                cands[i].sort(key=lambda x: match_costs[i][x])
-            else:
-                tmp = list(filter(lambda x: match_costs[i][x]<=self.cost_thresh2[cls], cands[i]))
-                if len(tmp)>=1:
-                    cands[i] = tmp
-                    cands[i].sort(key=lambda x: match_costs[i][x])
-                else:
-                    cands[i].sort(key=lambda x: match_costs[i][x])
-            cands[i] = cands[i][:max(1, 150//(n1+n2))]
-
-        best_box_map = []
-        min_cost = 1e16
-
-        # find at least one candidate to avoid no matching
-        found1 = 0
-        def rec_match_find1(rem_match, idx=0, box_map=[], curr_cost=0):
-            nonlocal found1
-            if found1>100:
-                return
-            if rem_match==0:
-                found1 += 1
-                nonlocal min_cost
-                if curr_cost<min_cost:
-                    min_cost = curr_cost
-                    nonlocal best_box_map
-                    best_box_map = box_map + [-1]*max(0, n1-len(box_map))
-                return
-            cnt = 0
-            for i in all_cands[idx]:
-                if i in box_map:
-                    continue
-                rec_match_find1(rem_match-1, idx+1, box_map+[i], curr_cost+match_costs[idx][i])
-
-        count = 0
-        start_time = time.time()
-        time_over = False
-        def rec_match(rem_match, idx=0, box_map=[], curr_cost=0):
-            nonlocal count
-            nonlocal time_over
-            count += 1
-            if count>self.max_patterns or time_over:
-                return
-            if count%10000==0:
-                current_time = time.time()
-                if current_time-start_time>self.max_time:
-                    time_over = True
-            nonlocal min_cost
-            if curr_cost>=min_cost:
-                return
-            if rem_match==0:
-                if curr_cost<min_cost:
-                    min_cost = curr_cost
-                    nonlocal best_box_map
-                    best_box_map = box_map + [-1]*max(0, n1-len(box_map))
-                return
-            if rem_match>=n1-idx:
-                return
-            rec_match(rem_match, idx+1, box_map+[-1], curr_cost)
-            for i in cands[idx]:
-                if i in box_map:
-                    continue
-                rec_match(rem_match-1, idx+1, box_map+[i], curr_cost+match_costs[idx][i])
-
-        rec_match_find1(min(n1, n2), curr_cost=(n1-min(n1, n2))*self.occ_weight[cls]+(n2-min(n1, n2)))
-        for n_occ in range(max(n1-n2, 0), max(n1-n2+self.max_frame_in[cls]+1, min(n2, self.max_frame_in[cls]))):
-            n_match = n1 - n_occ
-            if n_match>n2:
-                continue
-            # FIXME
-            for n_frame_in in range(n2-n_match+1):
-                n_frame_in = n2-n_match
-            rec_match(n_match, curr_cost=n_occ*self.occ_weight[cls]+n_frame_in)
-
-        if n1==0 or n2==0:
-            min_cost = 0
-
-        return best_box_map, min_cost
-
-
-    def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2]}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2]}]}
+    def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2], 'score': s}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2], 'score': s}]}
 
         hist_size = 128
         hist_mask = {'Car': np.ones((hist_size, hist_size), np.uint8), 'Pedestrian': np.ones((hist_size, hist_size), np.uint8)}
@@ -413,6 +270,9 @@ class Tracker:
 
             # prepare image inside each bounding box
             for box in boxes:
+                # just for evaluation with GT bboxes
+                if 'score' not in box.keys():
+                    box['score'] = -1
                 bb = box['box2d']
                 bb[0] = max(0, bb[0])
                 bb[1] = max(0, bb[1])
@@ -543,7 +403,7 @@ class Tracker:
                 if area_inside <=area*self.frame_out_thresh[cls]:
                     n_frame_out += 1
                     continue
-                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']})
+                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'score': p['score'], 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']})
 
             # match objects in the previous frame and the current frame and assign IDs
             box_map, cost = self.hungarian_match(adjusted_preds, boxes, cls)
@@ -577,14 +437,14 @@ class Tracker:
                     mv = [0, 0]
                     scale = [1, 1]
                 bb = pred[cls][i]['box2d']
-                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
+                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'score': pred[cls][i]['score'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
 
             # generate next prediction data
             for i in range(len(box_map)):
                 # discard too old occluded objects kept in the tracker
                 if box_map[i]==-1 and adjusted_preds[i]['occlusion']<self.max_occ_frames:
                     bb = adjusted_preds[i]['box2d']
-                    pred[cls].append({'box2d': bb, 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']})
+                    pred[cls].append({'box2d': bb, 'score': adjusted_preds[i]['score'], 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']})
 
         # keep object prediction information in the tracker
         self.predictions.append(pred)
