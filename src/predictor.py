@@ -53,8 +53,6 @@ class ScoringService(object):
             cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
             # batch_size, 1216, 1936, 3
             # _, _, _ = cls.model.predict_on_batch(np.zeros((2, 1216, 1936, 3)))
-
-            cls.prev_frame_pedestrian_number = None
             return True
         except Exception as e:
             print("Failed to load model {}".format(e))
@@ -461,29 +459,31 @@ class ScoringService(object):
                                                                                              clean_classes_pred_car,
                                                                                              clean_scores_car)
 
-        # if cls.prev_frame_pedestrian_number:
-        #     if len(cls.prev_frame_pedestrian_number) > 8:
-        #         pedestrian_nms_thr_coef = 1.2  # 0.45 --> 0.36
-        #     else:
-        #         pedestrian_nms_thr_coef = 1
-
         """ global non max suppression """
         if cls.left_crop or cls.right_crop or cls.flip_lr or cls.dark_frame or cls.bright_frame:
             pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian, probs=clean_scores_pedestrian,
                                                                        overlapThresh=cls.pedestrian_nms_thr)
+
+            clean_bboxes_pedestrian_nms = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
+            clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
+            clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
+
+            if len(clean_scores_pedestrian_nms) > 8:
+                pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian,
+                                                                           probs=clean_scores_pedestrian,
+                                                                           overlapThresh=cls.pedestrian_nms_thr * 0.8)
+                clean_bboxes_pedestrian_nms = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
+                clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
+                clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
+
             pick_inds_car = cls.non_max_suppression_with_scores(clean_bboxes_car, probs=clean_scores_car, overlapThresh=cls.car_nms_thr)
+            clean_bboxes_car_nms = list(clean_bboxes_car[i] for i in pick_inds_car)
+            clean_classes_pred_car_nms = list(clean_classes_pred_car[i] for i in pick_inds_car)
+            clean_scores_car_nms = list(clean_scores_car[i] for i in pick_inds_car)
 
-            clean_bboxes_pedestrian = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
-            clean_classes_pred_pedestrian = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
-            clean_scores_pedestrian = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
-
-            clean_bboxes_car = list(clean_bboxes_car[i] for i in pick_inds_car)
-            clean_classes_pred_car = list(clean_classes_pred_car[i] for i in pick_inds_car)
-            clean_scores_car = list(clean_scores_car[i] for i in pick_inds_car)
-
-            clean_bboxes = clean_bboxes_pedestrian + clean_bboxes_car
-            clean_classes_pred = clean_classes_pred_pedestrian + clean_classes_pred_car
-            clean_scores = clean_scores_pedestrian + clean_scores_car
+            clean_bboxes = clean_bboxes_pedestrian_nms + clean_bboxes_car_nms
+            clean_classes_pred = clean_classes_pred_pedestrian_nms + clean_classes_pred_car_nms
+            clean_scores = clean_scores_pedestrian_nms + clean_scores_car_nms
         else:
             clean_bboxes = clean_bboxes_pedestrian + clean_bboxes_car
             clean_classes_pred = clean_classes_pred_pedestrian + clean_classes_pred_car
@@ -496,7 +496,6 @@ class ScoringService(object):
                                                                                   cls.offset_y1_1,
                                                                                   cls.offset_y2_1)
 
-        # cls.prev_frame_pedestrian_number = len(clean_bboxes_pedestrian)
         pedestrian_list = []
         car_list = []
         for bbox, score, label in zip(clean_bboxes, clean_scores, clean_classes_pred):
@@ -506,11 +505,11 @@ class ScoringService(object):
             if area < 1024:
                 continue
             if label == 0:  # Pedestrian
-                pedestrian_list.append({"box2d": bbox})
+                pedestrian_list.append({"box2d": bbox, "score": score})
             elif label == 1:  # Car
                 # if width / float(height) < 0.9 and score < 0.9:
                 #     continue
-                car_list.append({"box2d": bbox})
+                car_list.append({"box2d": bbox, "score": score})
             else:
                 print("Irrelevant class detected: {}".format(label))
                 continue
