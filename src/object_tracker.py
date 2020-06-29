@@ -597,7 +597,6 @@ class Tracker:
                 if box['occlusion']==0:
                     tmp.append({'box2d': box['box2d'], 'score': box['score'], 'id': box['id']})
             ret[cls] = tmp
-        print(ret)
         return ret
 
 
