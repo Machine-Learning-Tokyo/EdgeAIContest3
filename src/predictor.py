@@ -493,13 +493,13 @@ class ScoringService(object):
             clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
             clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
 
-            if len(clean_scores_pedestrian_nms) > 8:
-                pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian,
-                                                                           probs=clean_scores_pedestrian,
-                                                                           overlapThresh=cls.pedestrian_nms_thr * 0.8)
-                clean_bboxes_pedestrian_nms = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
-                clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
-                clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
+            # if len(clean_scores_pedestrian_nms) > 8:
+            #     pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian,
+            #                                                                probs=clean_scores_pedestrian,
+            #                                                                overlapThresh=cls.pedestrian_nms_thr * 0.8)
+            #     clean_bboxes_pedestrian_nms = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
+            #     clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
+            #     clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
 
             pick_inds_car = cls.non_max_suppression_with_scores(clean_bboxes_car, probs=clean_scores_car, overlapThresh=cls.car_nms_thr)
             clean_bboxes_car_nms = list(clean_bboxes_car[i] for i in pick_inds_car)
