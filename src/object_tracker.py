@@ -455,7 +455,7 @@ class Tracker:
             for box in ret[cls]:
                 # return prediction data excluding occluded objects
                 if box['occlusion']==0:
-                    tmp.append({'box2d': box['box2d'], 'score': float(box['score']), 'id': box['id']})
+                    tmp.append({'box2d': box['box2d'], 'id': box['id']})
             ret[cls] = tmp
         return ret
 
