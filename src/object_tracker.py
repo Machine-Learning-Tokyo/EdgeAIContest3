@@ -543,7 +543,7 @@ class Tracker:
                 if area_inside <=area*self.frame_out_thresh[cls]:
                     n_frame_out += 1
                     continue
-                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']})
+                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'score': p['score'], 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']})
 
             # match objects in the previous frame and the current frame and assign IDs
             box_map, cost = self.hungarian_match(adjusted_preds, boxes, cls)
@@ -577,14 +577,14 @@ class Tracker:
                     mv = [0, 0]
                     scale = [1, 1]
                 bb = pred[cls][i]['box2d']
-                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
+                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'score': pred[cls][i]['score'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
 
             # generate next prediction data
             for i in range(len(box_map)):
                 # discard too old occluded objects kept in the tracker
                 if box_map[i]==-1 and adjusted_preds[i]['occlusion']<self.max_occ_frames:
                     bb = adjusted_preds[i]['box2d']
-                    pred[cls].append({'box2d': bb, 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']})
+                    pred[cls].append({'box2d': bb, 'score': adjusted_preds[i]['score'], 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']})
 
         # keep object prediction information in the tracker
         self.predictions.append(pred)
@@ -595,8 +595,9 @@ class Tracker:
             for box in ret[cls]:
                 # return prediction data excluding occluded objects
                 if box['occlusion']==0:
-                    tmp.append({'box2d': box['box2d'], 'id': box['id']})
+                    tmp.append({'box2d': box['box2d'], 'score': box['score'], 'id': box['id']})
             ret[cls] = tmp
+        print(ret)
         return ret
 
 
