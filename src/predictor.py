@@ -228,8 +228,12 @@ class ScoringService(object):
         clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = [], [], []
         clean_bboxes_car, clean_classes_pred_car, clean_scores_car = [], [], []
         for bbox_, score_, label_ in zip(boxes[0], scores[0], labels[0]):
-            if score_ < cls.threshold_car:
+            if label_ == -1:
                 break
+            if label_ == 0 and score_ < cls.threshold_pedestrian:
+                continue
+            if label_ == 1 and score_ < cls.threshold_car:
+                continue
             [x1, y1, x2, y2] = bbox_
             width = x2 - x1
             height = y2 - y1
@@ -251,8 +255,12 @@ class ScoringService(object):
         clean_bboxes_left_crop_car, clean_classes_pred_left_crop_car, clean_scores_left_crop_car = [], [], []
         if cls.left_crop:  # left (center) crop
             for bbox_, score_, label_ in zip(boxes[left_crop_order], scores[left_crop_order], labels[left_crop_order]):
-                if score_ < cls.threshold_car:
+                if label_ == -1:
                     break
+                if label_ == 0 and score_ < cls.threshold_pedestrian + cls.conf_score_bias:
+                    continue
+                if label_ == 1 and score_ < cls.threshold_car + cls.conf_score_bias:
+                    continue
 
                 [x1, y1, x2, y2] = bbox_
                 y1 += cls.offset_y1_1
@@ -277,8 +285,12 @@ class ScoringService(object):
         clean_bboxes_right_crop_car, clean_classes_pred_right_crop_car, clean_scores_right_crop_car = [], [], []
         if cls.right_crop:  # right (center) crop
             for bbox_, score_, label_ in zip(boxes[right_crop_order], scores[right_crop_order], labels[right_crop_order]):
-                if score_ < cls.threshold_car:
+                if label_ == -1:
                     break
+                if label_ == 0 and score_ < cls.threshold_pedestrian + cls.conf_score_bias:
+                    continue
+                if label_ == 1 and score_ < cls.threshold_car + cls.conf_score_bias:
+                    continue
                 [x1, y1, x2, y2] = bbox_
                 x1 += x_offset_3
                 y1 += cls.offset_y1_1
@@ -305,8 +317,12 @@ class ScoringService(object):
         clean_bboxes_flip_lr_car, clean_classes_pred_flip_lr_car, clean_scores_flip_lr_car = [], [], []
         if cls.flip_lr:  # horizontal flip
             for bbox_, score_, label_ in zip(boxes[flip_lr_order], scores[flip_lr_order], labels[flip_lr_order]):
-                if score_ < cls.threshold_car + cls.conf_score_bias:
+                if label_ == -1:
                     break
+                if label_ == 0 and score_ < cls.threshold_pedestrian + cls.conf_score_bias:
+                    continue
+                if label_ == 1 and score_ < cls.threshold_car + cls.conf_score_bias:
+                    continue
                 [x1, y1, x2, y2] = bbox_
                 x2_flip = cls.w - bbox_[0]
                 x1_flip = cls.w - bbox_[2]
@@ -334,8 +350,12 @@ class ScoringService(object):
         clean_bboxes_bright_car, clean_classes_pred_bright_car, clean_scores_bright_car = [], [], []
         if cls.bright_frame:
             for bbox_, score_, label_ in zip(boxes[bright_order], scores[bright_order], labels[bright_order]):
-                if score_ < cls.threshold_car + cls.conf_score_bias:
+                if label_ == -1:
                     break
+                if label_ == 0 and score_ < cls.threshold_pedestrian + cls.conf_score_bias:
+                    continue
+                if label_ == 1 and score_ < cls.threshold_car + cls.conf_score_bias:
+                    continue
                 [x1, y1, x2, y2] = bbox_
 
                 width = x2 - x1
@@ -358,8 +378,13 @@ class ScoringService(object):
         clean_bboxes_dark_car, clean_classes_pred_dark_car, clean_scores_dark_car = [], [], []
         if cls.dark_frame:
             for bbox_, score_, label_ in zip(boxes[dark_order], scores[dark_order], labels[dark_order]):
-                if score_ < cls.threshold_car + cls.conf_score_bias:
+                if label_ == -1:
                     break
+                if label_ == 0 and score_ < cls.threshold_pedestrian + cls.conf_score_bias:
+                    continue
+                if label_ == 1 and score_ < cls.threshold_car + cls.conf_score_bias:
+                    continue
+
                 [x1, y1, x2, y2] = bbox_
 
                 width = x2 - x1
