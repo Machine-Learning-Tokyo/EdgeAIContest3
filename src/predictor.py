@@ -39,6 +39,7 @@ class ScoringService(object):
             cls.pedestrian_nms_thr = 0.4
             cls.car_nms_thr = 0.35
             cls.conf_score_bias = 0.2
+            cls.reassign_id_pedestrian = False
 
             cls.threshold_pedestrian = 0.5  # DO NOT CHANGE
             cls.threshold_car = 0.5  # DO NOT CHANGE
@@ -579,7 +580,10 @@ class ScoringService(object):
                 print("Frames processed : {} ({})".format(ii, start_time - break_time))
                 break_time = time.time()
         cap.release()
-        predictions = cls.filter_predictions(predictions)
+        if cls.reassign_id_pedestrian:
+            predictions = cls.filter_predictions_switch(predictions)
+        else:
+            predictions = cls.filter_predictions(predictions)
         end_time = time.time()
         # print("[PERFORMANCE] Video {} Frame {} Total_Time     = {}".format(fname, ii, end_time - start_time))
         # print("-----------------------------")
@@ -597,5 +601,46 @@ class ScoringService(object):
         for sequence in data:
             for c in sequence:
                 sequence[c] = list(filter(lambda i: id_count[c][i['id']] > cls.min_no_of_frames, sequence[c]))
+
+        return data
+
+    @classmethod
+    def filter_predictions_switch(cls, data, dummy_id = 7777):
+        """Switch ID of object_id if appears less than 3 time in the seq."""
+        # After experiment only improve score for pedestrian so only on pedestrian
+        id_count = defaultdict(lambda: defaultdict(int))
+        re_assign_objects = 0
+        start = time.time()
+
+        # Enum all ID into dict
+        for sequence in data:
+            for c in sequence:
+                ids = [ item['id'] for item in sequence[c] ]
+                for id in ids:
+                    id_count[c][id] = id_count[c][id] + 1
+
+        for sequence in data:
+            for c in sequence:
+                if c == "Pedestrian":
+                    # Filter out object to be reassign and find id
+                    id_to_change = []
+                    obj_to_reassign = list(filter(lambda i: id_count[c][i['id']] < cls.min_no_of_frames, sequence[c]))
+                    if len(obj_to_reassign) > 0:
+                        re_assign_objects += len(obj_to_reassign)
+                        for _obj in obj_to_reassign:
+                            id_to_change.append(_obj['id'])
+                    
+                    # Switch all the id from the list:
+                    if id_to_change:
+                        for obj in sequence[c]:
+                            if obj['id'] in id_to_change:
+                                obj['id'] = dummy_id
+                else:
+                    # Decrease score on Car so simply removing
+                    sequence[c] = list(filter(lambda i: id_count[c][i['id']] > cls.min_no_of_frames, sequence[c]))
+
+        print("Post processing:")
+        print("  Time: {}".format(time.time() - start))
+        print("  Number of Reasign: {}".format(re_assign_objects))
 
         return data
