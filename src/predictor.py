@@ -11,6 +11,8 @@ from keras_retinanet import models
 from object_tracker import Tracker
 from keras_retinanet.utils.image import read_image_bgr, adjust_brightness
 import copy
+from keras.models import load_model
+from tensorflow.keras.applications.mobilenet import preprocess_input
 import time
 import pdb
 from collections import defaultdict
@@ -48,6 +50,9 @@ class ScoringService(object):
             cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
             # batch_size, 1216, 1936, 3
             # _, _, _ = cls.model.predict_on_batch(np.zeros((2, 1216, 1936, 3)))
+
+            cls.car_classification_model = load_model('../model/car_model_074.h5', compile=False)
+            cls.pedestrian_classification_model = load_model('../model/pedestrian_model_epoch_3_068.h5', compile=False)
             return True
         except Exception as e:
             print("Failed to load model {}".format(e))
@@ -163,6 +168,108 @@ class ScoringService(object):
         return abs(data - np.mean(data)) < m * np.std(data)
 
     @classmethod
+    def classification(cls, boxes, scores, labels, frame):
+        boxes_ped, scores_ped, labels_ped = [], [], []
+        boxes_car, scores_car, labels_car = [], [], []
+        unsure_ped_boxes, unsure_ped_scores, unsure_ped_labels = [], [], []
+        unsure_car_boxes, unsure_car_scores, unsure_car_labels = [], [], []
+
+        keras_frame = frame[:, :, ::-1]
+
+        for bb, sc, lb in zip(boxes, scores, labels):
+            if lb == 1:
+                if sc > cls.threshold_car:
+                    boxes_car.append(bb)
+                    scores_car.append(sc)
+                    labels_car.append(lb)
+                elif sc > 0.3:
+                    unsure_car_boxes.append(bb)
+                    unsure_car_scores.append(sc)
+                    unsure_car_labels.append(lb)
+            elif lb == 0:
+                if sc > cls.threshold_pedestrian:
+                    boxes_ped.append(bb)
+                    scores_ped.append(sc)
+                    labels_ped.append(lb)
+                elif sc > 0.3:
+                    unsure_ped_boxes.append(bb)
+                    unsure_ped_scores.append(sc)
+                    unsure_ped_labels.append(lb)
+
+        if len(unsure_car_boxes) > 0:
+            batch = np.zeros((4, 84, 84, 3))
+            unsure_car_boxes = unsure_car_boxes[:4]
+            unsure_car_scores = unsure_car_scores[:4]
+            unsure_car_labels = unsure_car_labels[:4]
+            unsure_car_batch = []
+
+            pick_inds = []
+            for ii, bb in enumerate(unsure_car_boxes):
+                try:
+                    img = keras_frame[int(bb[1]):int(bb[2]), int(bb[0]):int(bb[2])]
+                    img = cv2.resize(img, (84, 84), interpolation=cv2.INTER_CUBIC)
+                    img = preprocess_input(img)
+                    unsure_car_batch.append(img)
+                    pick_inds.append(ii)
+                except:
+                    continue
+            batch_size = len(unsure_car_batch)
+            if batch_size > 0:
+                unsure_car_batch = np.array(unsure_car_batch)
+                batch[:batch_size, :, :, :] = unsure_car_batch
+                unsure_car_preds = cls.car_classification_model.predict(batch)
+
+                for jj in range(0, batch_size):
+                    if unsure_car_preds[jj] > 0.8:
+                        boxes_car.append(unsure_car_boxes[pick_inds[jj]])
+                        scores_car.append(unsure_car_scores[pick_inds[jj]])
+                        labels_car.append(unsure_car_labels[pick_inds[jj]])
+
+                #
+                # for jj, (bb, sc, lb, ii) in enumerate(zip(unsure_car_boxes[:batch_size], unsure_car_scores[:batch_size], unsure_car_labels[:batch_size], pick_inds)):
+                #     if unsure_car_preds[jj] > 0.8:
+                #         boxes_car.append(bb)
+                #         scores_car.append(sc)
+                #         labels_car.append(lb)
+
+        if len(unsure_ped_boxes) > 0:
+            batch = np.zeros((4, 128, 60, 3))
+            unsure_ped_boxes = unsure_ped_boxes[:4]
+            unsure_ped_scores = unsure_ped_scores[:4]
+            unsure_ped_labels = unsure_ped_labels[:4]
+            unsure_ped_batch = []
+
+            pick_inds = []
+            for ii, bb in enumerate(unsure_ped_boxes):
+                try:
+                    img = keras_frame[int(bb[1]):int(bb[2]), int(bb[0]):int(bb[2])]
+                    img = cv2.resize(img, (60, 128), interpolation=cv2.INTER_CUBIC)
+                    img = preprocess_input(img)
+                    unsure_ped_batch.append(img)
+                    pick_inds.append(ii)
+                except:
+                    continue
+            batch_size = len(unsure_ped_batch)
+            if batch_size > 0:
+                unsure_ped_batch = np.array(unsure_ped_batch)
+                batch[:batch_size, :, :, :] = unsure_ped_batch
+                unsure_ped_preds = cls.pedestrian_classification_model.predict(batch)
+
+                for jj in range(0, batch_size):
+                    if unsure_ped_preds[jj] > 0.8:
+                        boxes_ped.append(unsure_ped_boxes[pick_inds[jj]])
+                        scores_ped.append(unsure_ped_scores[pick_inds[jj]])
+                        labels_ped.append(unsure_ped_labels[pick_inds[jj]])
+
+                # for jj, (bb, sc, lb, ii) in enumerate(zip(unsure_ped_boxes[:batch_size], unsure_ped_scores[:batch_size], unsure_ped_labels[:batch_size], pick_inds)):
+                #     if unsure_ped_preds[jj] > 0.8:
+                #         boxes_ped.append(bb)
+                #         scores_ped.append(sc)
+                #         labels_ped.append(lb)
+
+        return boxes_car + boxes_ped, scores_car + scores_ped, labels_car + labels_ped
+
+    @classmethod
     def model_inference(cls, frame, ii):
         # frame_darker = adjust_brightness(frame, -0.3)
         # frame_brighter = adjust_brightness(frame, 0.3)
@@ -220,19 +327,14 @@ class ScoringService(object):
         # boxes[bright_order] = boxes[bright_order] / scale5
         # boxes[dark_order] = boxes[dark_order] / scale6
 
+        boxes_0, scores_0, labels_0 = cls.classification(boxes[0], scores[0], labels[0], frame)
         clean_bboxes_pedestrian, clean_classes_pred_pedestrian, clean_scores_pedestrian = [], [], []
         clean_bboxes_car, clean_classes_pred_car, clean_scores_car = [], [], []
-        for bbox_, score_, label_ in zip(boxes[0], scores[0], labels[0]):
-            if label_ == -1:
-                break
-            if label_ == 0 and score_ < cls.threshold_pedestrian:
-                continue
-            if label_ == 1 and score_ < cls.threshold_car:
-                continue
+
+        for bbox_, score_, label_ in zip(boxes_0, scores_0, labels_0):
             [x1, y1, x2, y2] = bbox_
             width = x2 - x1
             height = y2 - y1
-
             if width * height < 1024:
                 continue
             if label_ == 0:
@@ -245,6 +347,32 @@ class ScoringService(object):
                 clean_scores_car.append(score_)
             else:
                 continue
+
+
+
+        # for bbox_, score_, label_ in zip(boxes[0], scores[0], labels[0]):
+        #     if label_ == -1:
+        #         break
+        #     if label_ == 0 and score_ < cls.threshold_pedestrian:
+        #         continue
+        #     if label_ == 1 and score_ < cls.threshold_car:
+        #         continue
+        #     [x1, y1, x2, y2] = bbox_
+        #     width = x2 - x1
+        #     height = y2 - y1
+        #
+        #     if width * height < 1024:
+        #         continue
+        #     if label_ == 0:
+        #         clean_bboxes_pedestrian.append([int(x1), int(y1), int(x2), int(y2)])
+        #         clean_classes_pred_pedestrian.append(label_)
+        #         clean_scores_pedestrian.append(score_)
+        #     elif label_ == 1:
+        #         clean_bboxes_car.append([int(x1), int(y1), int(x2), int(y2)])
+        #         clean_classes_pred_car.append(label_)
+        #         clean_scores_car.append(score_)
+        #     else:
+        #         continue
 
         clean_bboxes_left_crop_pedestrian, clean_classes_pred_left_crop_pedestrian, clean_scores_left_crop_pedestrian = [], [], []
         clean_bboxes_left_crop_car, clean_classes_pred_left_crop_car, clean_scores_left_crop_car = [], [], []
