@@ -13,24 +13,9 @@ from collections import defaultdict
 class ScoringService(object):
     @classmethod
     def get_model(cls, model_path='../model/resnet50_csv_06.h5.frozen'):
-        """
-        -> postprocess heuristic, no adaptive thr, 2 frames consistence, confidence thresholds = [0.5, 0.5], scale=0.2
-                1.1 - epoch15 (single img): 0.6358
-                1.2 - epoch15 (two img [orig + flip_lr] + class based nms [0.45, 0.4]): 0.6346
-                1.3 - epoch15 (3 img [orig + left + right] + class based nms [0.45, 0.4]): 0.6422 ***
-        """
         print("get_model called")
         try:
             cls.min_no_of_frames = 2  # 2 seems more reasonable than 4 !!!
-            """
-            1. left + right
-            2. flip_lr
-            3. dark + bright
-            
-                4. cls.pedestrian_nms_thr (> 0.45) if FP is large then increase this
-                5. cls.car_nms_thr (less important)
-                6. cls.conf_score_bias (less important)
-            """
             cls.left_crop = False
             cls.right_crop = False
             cls.flip_lr = True
@@ -49,6 +34,7 @@ class ScoringService(object):
             cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
             cls.adaptive_threshold_coefficient = 1  # DON'T USE ADAPTIVE THR !!! =1 means no adaptive thr
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
+            cls.apply_adaptive_pedestrian_nms = False
 
             cls.model = models.load_model('../model/resnet101_csv_15.5classes.all_bboxes.h5.frozen', backbone_name='resnet101')  # 0.6358
             # batch_size, 1216, 1936, 3
@@ -493,13 +479,14 @@ class ScoringService(object):
             clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
             clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
 
-            # if len(clean_scores_pedestrian_nms) > 8:
-            #     pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian,
-            #                                                                probs=clean_scores_pedestrian,
-            #                                                                overlapThresh=cls.pedestrian_nms_thr * 0.8)
-            #     clean_bboxes_pedestrian_nms = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
-            #     clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
-            #     clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
+            if cls.apply_adaptive_pedestrian_nms:
+                if len(clean_scores_pedestrian_nms) > 8:
+                    pick_inds_pedestrian = cls.non_max_suppression_with_scores(clean_bboxes_pedestrian,
+                                                                               probs=clean_scores_pedestrian,
+                                                                               overlapThresh=cls.pedestrian_nms_thr * 0.8)
+                    clean_bboxes_pedestrian_nms = list(clean_bboxes_pedestrian[i] for i in pick_inds_pedestrian)
+                    clean_classes_pred_pedestrian_nms = list(clean_classes_pred_pedestrian[i] for i in pick_inds_pedestrian)
+                    clean_scores_pedestrian_nms = list(clean_scores_pedestrian[i] for i in pick_inds_pedestrian)
 
             pick_inds_car = cls.non_max_suppression_with_scores(clean_bboxes_car, probs=clean_scores_car, overlapThresh=cls.car_nms_thr)
             clean_bboxes_car_nms = list(clean_bboxes_car[i] for i in pick_inds_car)
