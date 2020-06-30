@@ -31,13 +31,16 @@ class Tracker:
         self.frame_in_weight = {'Car': 0.14, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
 
-    def calculate_cost(self, box1, box2, hist1, hist2, cls='Car'):
+    def calculate_cost(self, box1, box2, hist1, hist2, score1, score2, cls='Car'):
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
         hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(len(hist1))]
         hist_score = mean(hist_score)
+        if score1>=0:
+            r = min(score1/(score2+1e-12), score2/(score1+1e-12))
+            hist_score *= pow(r, 0.3)
 
         cnt1 = [box1[0]+w1/2, box1[1]+h1/2]
         cnt2 = [box2[0]+w2/2, box2[1]+h2/2]
@@ -61,7 +64,7 @@ class Tracker:
 
         for i in range(n1):
             for j in range(n2):
-                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], cls)
+                match_costs[i][j] = self.calculate_cost(preds1[i]['box2d'], preds2[j]['box2d'], hist1s[i], hist2s[j], preds1[i]['score'], preds2[j]['score'], cls)
         best_box_map = []
         min_cost = 1e16
         no_update = 0
