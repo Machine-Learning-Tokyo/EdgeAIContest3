@@ -1,3 +1,9 @@
+import tensorflow as tf
+gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+for device in gpu_devices:
+    tf.config.experimental.set_memory_growth(device, True)
+
+
 import os
 import cv2
 import numpy as np
@@ -8,6 +14,8 @@ import copy
 import time
 import pdb
 from collections import defaultdict
+
+
 
 
 class ScoringService(object):
@@ -38,8 +46,9 @@ class ScoringService(object):
             cls.dark_frame = False
             cls.pedestrian_nms_thr = 0.4
             cls.car_nms_thr = 0.35
-            cls.conf_score_bias = 0.2
+            cls.conf_score_bias = 0.1
             cls.reassign_id_pedestrian = False
+            cls.dummy_id_range = range(5000, 5555)
 
             cls.threshold_pedestrian = 0.5  # DO NOT CHANGE
             cls.threshold_car = 0.5  # DO NOT CHANGE
@@ -656,9 +665,11 @@ class ScoringService(object):
                     
                     # Switch all the id from the list:
                     if id_to_change:
+                        dummy_index = 0
                         for obj in sequence[c]:
                             if obj['id'] in id_to_change:
-                                obj['id'] = dummy_id
+                                obj['id'] = cls.dummy_id_range[dummy_index]
+                                dummy_index += 1
                 else:
                     # Decrease score on Car so simply removing
                     sequence[c] = list(filter(lambda i: id_count[c][i['id']] > cls.min_no_of_frames, sequence[c]))
