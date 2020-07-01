@@ -28,7 +28,7 @@ We have extracted the frames from the video and saved the still images as PNG fo
         Svehicle,4
       ```
 
-## Model training
+# Model training
 - For object detection, we have used keras-retinanet library: https://github.com/fizyr/keras-retinanet
     - Installation: after cloning the repo to the machine, run `pip install . --user` 
     - We have modified the augmentation parameters in the `keras_retinanet/bin/train.py`. here is the augmentation we have used during the training:
