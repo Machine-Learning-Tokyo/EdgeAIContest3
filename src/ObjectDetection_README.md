@@ -30,7 +30,7 @@ Run the "convert_video_to_image.sh" , it will consume the videos present in trai
     - validation set: train_00, train_01, train_01
     - train set: train_02 ~ train_24
 - the corresponding training data is generated using the script: [generate_retinanet_train_annotation.py](generate_retinanet_train_annotation.py)
-    - we have seen some outliers (odd cases) where the annotation pixel value exceeds the image dimensions. That's why we did not include those annotations
+    - we have seen some outliers (odd cases) where the annotation pixel value exceeds the image dimensions. That's why we substracted 3 from annotation values (to make it valid annotation), and this would not hurt the training at all, i.e. changing the bounding box annotation does not change anything at all.
     - excluded thin, short objects (if any). excluded the object with the width/height of smaller than 5 pixels.
     - the training data format is the same with keras-retinanet's CSV data format:
         - ```image_fpath,x1,y1,x2,y2,class```
