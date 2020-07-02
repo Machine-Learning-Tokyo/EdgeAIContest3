@@ -5,11 +5,15 @@ import numpy as np
 
 import cv2
 
-ann_folder = './train_annotations'
+# change this path to correct train_annotations folder provided from signate
+ann_folder = './train_annotations/'
+
+# change this path to where you want to generate the annotated csv file
 csv_ann = './retinanet_annotations.csv.train.all_frames.all_objects.5_classes'
 
 csv_ann_file = open(csv_ann, 'w')
 
+# list up all the training annotation files
 json_files = os.listdir(ann_folder)
 
 for json_file in json_files:
@@ -18,7 +22,7 @@ for json_file in json_files:
 
     if json_file in ['train_00.json', 'train_01.json', 'train_02.json']:
         continue
-    with open(json_file, 'r') as d:
+    with open(ann_folder + json_file, 'r') as d:
         data = json.load(d)
         anns = data['sequence']
         for i, ann in enumerate(anns):
