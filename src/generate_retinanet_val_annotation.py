@@ -16,7 +16,7 @@ for json_file in json_files:
     if json_file.split('.')[-1] != 'json':
         continue
 
-    if json_file in ['train_00.json', 'train_01.json', 'train_02.json']:
+    if json_file not in ['train_00.json', 'train_01.json', 'train_02.json']:
         continue
     with open(json_file, 'r') as d:
         data = json.load(d)
