@@ -11,15 +11,21 @@ We have extracted the frames from the video and saved the still images as PNG fo
 - we have splitted the videos into train and validation set:
     - validation set: train_00, train_01, train_01
     - train set: train_02 ~ train_24
-- the corresponding data is generated using the script: [generate_retinanet_annotation.py](src/generate_retinanet_annotation.py)
+- the corresponding training data is generated using the script: [generate_retinanet_train_annotation.py](src/generate_retinanet_train_annotation.py)
     - we have seen some outliers (odd cases) where the annotation pixel value exceeds the image dimensions. That's why we did not include those annotations
     - excluded thin, short objects (if any). excluded the object with the width/height of smaller than 5 pixels.
     - the training data format is the same with keras-retinanet's CSV data format:
         - ```image_fpath,x1,y1,x2,y2,class```
-    - this script generates two files:
-        - ```retinanet_annotations.csv.train.all_frames.all_objects.5_classes```
-        - ```retinanet_annotations.csv.val.all_frames.all_objects.5_classes```
-    - and we constructed `class_id_map.txt.5classes` file:
+    - this script generates a train data file:
+            - ```retinanet_annotations.csv.train.all_frames.all_objects.5_classes```
+- the corresponding training data is generated using the script: [generate_retinanet_val_annotation.py](src/generate_retinanet_val_annotation.py)
+    - we have seen some outliers (odd cases) where the annotation pixel value exceeds the image dimensions. That's why we did not include those annotations
+    - excluded thin, short objects (if any). excluded the object with the width/height of smaller than 5 pixels.
+    - the training data format is the same with keras-retinanet's CSV data format:
+        - ```image_fpath,x1,y1,x2,y2,class```
+    - this script generates a validation data file:
+            - ```retinanet_annotations.csv.val.all_frames.all_objects.5_classes```
+- construct the `class_id_map.txt.5classes` file:
         ```
         Pedestrian,0
         Car,1
