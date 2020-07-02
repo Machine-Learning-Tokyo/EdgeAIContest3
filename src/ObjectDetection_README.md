@@ -1,6 +1,24 @@
 # Pre-processing
+## Folder Structure
+    .
+    ├── generate_retinanet_train_annotation.py   # training data generator
+    ├── generate_retinanet_val_annotation.py     # validation data generator
+    ├── ObjectDetection_README.md                # Readme file
+    ├── convert_video_to_image.sh                # quick script to extract individual frames as .png images from videos
+    ├── train_annotations                        # train_annotations folder provided by signate (symlinked or copy)
+    └── train_videos                             # train_videos folder provided by signate (symlinked or copy)
+
 ## Data format
-We have extracted the frames from the video and saved the still images as PNG format
+We have extracted the frames from the video and saved the still images as PNG format using ffmpeg tool. Please install this tool using apt package manager. 
+
+Run the "convert_video_to_image.sh" , it will consume the videos present in train_videos folder and produce train_{} folder for each training video, containing all the images.
+```
+    apt update
+    apt install ffmpeg
+    ffmpeg -version
+
+    bash convert_video_to_image.sh
+```
 
 ## Training data creation
 - There are 10 classes in train set, for training we have used 5 of them: 
@@ -11,14 +29,14 @@ We have extracted the frames from the video and saved the still images as PNG fo
 - we have splitted the videos into train and validation set:
     - validation set: train_00, train_01, train_01
     - train set: train_02 ~ train_24
-- the corresponding training data is generated using the script: [generate_retinanet_train_annotation.py](src/generate_retinanet_train_annotation.py)
+- the corresponding training data is generated using the script: [generate_retinanet_train_annotation.py](generate_retinanet_train_annotation.py)
     - we have seen some outliers (odd cases) where the annotation pixel value exceeds the image dimensions. That's why we did not include those annotations
     - excluded thin, short objects (if any). excluded the object with the width/height of smaller than 5 pixels.
     - the training data format is the same with keras-retinanet's CSV data format:
         - ```image_fpath,x1,y1,x2,y2,class```
     - this script generates a train data file:
             - ```retinanet_annotations.csv.train.all_frames.all_objects.5_classes```
-- the corresponding training data is generated using the script: [generate_retinanet_val_annotation.py](src/generate_retinanet_val_annotation.py)
+- the corresponding training data is generated using the script: [generate_retinanet_val_annotation.py](generate_retinanet_val_annotation.py)
     - we have seen some outliers (odd cases) where the annotation pixel value exceeds the image dimensions. That's why we did not include those annotations
     - excluded thin, short objects (if any). excluded the object with the width/height of smaller than 5 pixels.
     - the training data format is the same with keras-retinanet's CSV data format:
@@ -26,16 +44,23 @@ We have extracted the frames from the video and saved the still images as PNG fo
     - this script generates a validation data file:
             - ```retinanet_annotations.csv.val.all_frames.all_objects.5_classes```
 - construct the `class_id_map.txt.5classes` file:
-        ```
+    ```
         Pedestrian,0
         Car,1
         Truck,2
         Bus,3
         Svehicle,4
-      ```
+    ```
 
 # Model training
 - For object detection, we have used keras-retinanet library: https://github.com/fizyr/keras-retinanet
+    Here is a sample manual
+    ```
+        git clone https://github.com/fizyr/keras-retinanet.git
+        cd keras-retinanet; pwd
+        pip install . --user
+        python setup.py build_ext --inplace
+    ```
     - Installation: after cloning the repo to the machine, run `pip install . --user` 
     - We have modified the augmentation parameters in the `keras_retinanet/bin/train.py`. here is the augmentation we have used during the training:
     ```
@@ -59,9 +84,9 @@ We have extracted the frames from the video and saved the still images as PNG fo
     )
     ```
 
-    - Training: run the `keras_retinanet/bin/train.py` file with some arguments.
+    - Training: run the `keras_retinanet/bin/train.py` file with some arguments. The backbone pretrained model (ImageNet weights) will be downloaded automatically. 
         ```
-        python keras_retinanet/bin/train.py --steps 13200 --snapshot-path ./all_obj.5classes.resnet101 --random-transform --no-resize --lr 1e-5 --epochs 100 --backbone resnet101 csv retinanet_annotations.csv.train.all_frames.all_objects.5_classes class_id_map.txt.5classes --val-annotations retinanet_annotations.csv.val.all_frames.all_objects.5_classes
+        python keras-retinanet/keras_retinanet/bin/train.py --steps 13200 --snapshot-path ./all_obj.5classes.resnet101 --random-transform --no-resize --lr 1e-5 --epochs 100 --backbone resnet101 csv retinanet_annotations.csv.train.all_frames.all_objects.5_classes class_id_map.txt.5classes --val-annotations retinanet_annotations.csv.val.all_frames.all_objects.5_classes
       ```
         - steps: the total number of images in train set is 13,200: `22 (videos) * 600 (total number of frames in a video) = 13200`
         - snapshot-path: where to save the model snapshots
