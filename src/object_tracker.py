@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------
+#  Object tracking class to track objects and assign IDs.
+#  Released under Apache License 2.0
+#  Email: machine.learning.tokyo@gmail.com
+# -----------------------------------------------------------
 import cv2
 import os
 import numpy as np
@@ -32,6 +38,7 @@ class Tracker:
 
 
     def calculate_cost(self, box1, box2, hist1, hist2, score1, score2, cls='Car'):
+        """ Calculate cost used for Hungarian matching: histogram, object distance and size differences. """
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
@@ -54,6 +61,9 @@ class Tracker:
     # find the optimal matching between objects in the previous frame (+occluded objects in the past frames) and objects in the current frame
     # using hungarian algorithm for maximum weighted matching
     def hungarian_match(self, preds1, preds2, cls='Car'):
+        """ Find the optimal matching between objects in the previous frame (and occluded objects in the past frames) and 
+        objects in the current frame by using hungarian algorithm for maximum weighted matching.
+        """
         n1 = len(preds1) # number of objects in the previous frame
         n2 = len(preds2) # number of objects in the current frame
 
@@ -243,7 +253,10 @@ class Tracker:
 
 
     def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2], 'score': s}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2], 'score': s}]}
-
+        """ Main function of our tracker that manages to retrieve information from previous frames, 
+        extracts features from the different objects from the new frame (position, size, HSV histogram, …), 
+        predicts next position, match current frame object with history, and finally assign ids.
+        """
         hist_size = 128
         hist_mask = {'Car': np.ones((hist_size, hist_size), np.uint8), 'Pedestrian': np.ones((hist_size, hist_size), np.uint8)}
         for y in range(hist_size//2):

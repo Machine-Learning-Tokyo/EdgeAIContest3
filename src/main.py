@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------
+#  Main.py file to start the inference process.
+#  This class intantiates a ScoringService and calls predict function of that instance.
+#  The video file on which we want to perform inference (object detection and tracking) is passed as file path parameter to the predict function.
+#  The results are returned in json format consisting of class predictions and assigned ids for each frame.
+#  Multiple videos are passed by looping over the predict function and the results are aggregated into one json file.
+#  Released under Apache License 2.0
+#  Email: machine.learning.tokyo@gmail.com
+# -----------------------------------------------------------
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import pdb

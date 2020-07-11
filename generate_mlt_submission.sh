@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # clear existing mlt_submission folder
 rm -r mlt_submission
 mkdir -pv mlt_submission/{src,model}
