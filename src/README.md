@@ -1,9 +1,9 @@
 # Source Explained
 
-For the sack of submission, and fast developping the current module for object detection are not yet updated. Please refer to prediction.py to get the lastest developement.
+For the sake of fast development and submissions, the current module for object detection is not yet updated. Please refer to prediction.py to get the latest developement.
 
 ## Content
-Compossed by 1 main process: ```process_video.py```, that takes care of loading the video, setting up the **detection_module**, the **submission_helper**, and **tracking_module**.
+Composed by 1 main process: ```process_video.py```, that takes care of loading the video, setting up the **detection_module**, the **submission_helper**, and **tracking_module**.
 
 - prediction.py: the submission inference src.
 

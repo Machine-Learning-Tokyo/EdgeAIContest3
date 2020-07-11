@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # clear existing sample_submit folder
 rm -r sample_submit
 mkdir -pv sample_submit/src

@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------
+#  Generate the training data from annotations for object detection training
+#  Released under Apache License 2.0
+#  Email: machine.learning.tokyo@gmail.com
+# -----------------------------------------------------------
 import json
 import pdb
 import os

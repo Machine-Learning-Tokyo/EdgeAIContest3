@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------
+#  Generate the validation data from annotations for object detection validation
+#  Released under Apache License 2.0
+#  Email: machine.learning.tokyo@gmail.com
+# -----------------------------------------------------------
 import json
 import pdb
 import os
