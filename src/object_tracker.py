@@ -11,11 +11,13 @@ import copy
 import json
 import time
 import shutil
+# import matplotlib.pyplot as plt
 from queue import Queue
 from glob import glob
 from argparse import ArgumentParser
 from statistics import mean
 from concurrent.futures import ProcessPoolExecutor
+# from keras_retinanet.utils.image import adjust_brightness
 
 
 class Tracker:
@@ -36,6 +38,51 @@ class Tracker:
         self.occ_weight = {'Car': 0.85, 'Pedestrian': 0.7} # cost to detect a object in the previous frame as occluded
         self.frame_in_weight = {'Car': 0.14, 'Pedestrian': 0.43} # cost to detect a object as in the current frame as newly framed in
 
+    def iou(self, a, b):
+        if a[0] >= a[2] or a[1] >= a[3] or b[0] >= b[2] or b[1] >= b[3]:
+            return 0.0
+        # area_i = intersection(a, b)
+        x, y = max(a[0], b[0]), max(a[1], b[1])
+        w, h = min(a[2], b[2]) - x, min(a[3], b[3]) - y
+        area_i = 0 if w<0 or h<0 else w*h
+        # area_u = union(a, b, area_i)
+        area_a, area_b = (a[2]-a[0]) * (a[3]-a[1]), (b[2]-b[0]) * (b[3]-b[1])
+        area_u = area_a + area_b - area_i
+        return area_i / (area_u + 1e-6)
+
+
+    def get_bb_image(self, image, bb):
+        bb = [max(0, bb[0]), max(0, bb[1]), min(self.image_size[0]-1, bb[2]), min(self.image_size[1]-1, bb[3])]
+        bb = [min(bb[0], bb[2]), min(bb[1], bb[3]), max(bb[0], bb[2]), max(bb[1], bb[3])]
+        im = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
+        return im
+
+    def smooth_image(self, image):
+        im = cv2.bilateralFilter(image.copy(), 7, 40, 40)
+        im = cv2.bilateralFilter(im, 7, 40, 40)
+        return im
+
+    def get_hist(self, image, hist_mask):
+        image = cv2.cvtColor(cv2.resize(image, (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)
+        im1 = image[:64, :64, :]
+        im2 = image[:64, 64:, :]
+        im3 = image[64:, :64, :]
+        im4 = image[64:, 64:, :]
+        im5 = image[32:-32, 32:-32]
+        hist1 = [cv2.calcHist([im1], [c], hist_mask[:64, :64], [64], [0, 256]) for c in range(3)]
+        hist2 = [cv2.calcHist([im2], [c], hist_mask[:64, 64:], [64], [0, 256]) for c in range(3)]
+        hist3 = [cv2.calcHist([im3], [c], hist_mask[64:, :64], [64], [0, 256]) for c in range(3)]
+        hist4 = [cv2.calcHist([im4], [c], hist_mask[64:, 64:], [64], [0, 256]) for c in range(3)]
+        hist5 = [cv2.calcHist([im5], [c], hist_mask[32:-32, 32:-32], [64], [0, 256]) for c in range(3)]
+        hist = hist1 + hist2 + hist3 + hist4 + hist5
+        return hist
+
+
+    def get_similality(self, hist1, hist2):
+        hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(len(hist1))]
+        hist_score = mean(hist_score)
+        return hist_score
+
 
     def calculate_cost(self, box1, box2, hist1, hist2, score1, score2, cls='Car'):
         """ Calculate cost used for Hungarian matching: histogram, object distance and size differences. """
@@ -43,8 +90,7 @@ class Tracker:
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
 
         # compare the RGB histograms of two given bbox images
-        hist_score = [cv2.compareHist(hist1[c], hist2[c], cv2.HISTCMP_CORREL) for c in range(len(hist1))]
-        hist_score = mean(hist_score)
+        hist_score = self.get_similality(hist1, hist2)
         if score1>=0:
             r = min(score1/(score2+1e-12), score2/(score1+1e-12))
             hist_score *= pow(r, 0.3)
@@ -284,33 +330,6 @@ class Tracker:
             adjusted_preds = [] # bboxes predicted from bboxes in the last frame, using velocity of position/size
             n_frame_out = 0
 
-            # prepare image inside each bounding box
-            for box in boxes:
-                # just for evaluation with GT bboxes
-                if 'score' not in box.keys():
-                    box['score'] = -1
-                bb = box['box2d']
-                bb[0] = max(0, bb[0])
-                bb[1] = max(0, bb[1])
-                bb[2] = min(self.image_size[0]-1, bb[2])
-                bb[3] = min(self.image_size[1]-1, bb[3])
-                bb = [min(bb[0], bb[2]), min(bb[1], bb[3]), max(bb[0], bb[2]), max(bb[1], bb[3])]
-                box['image'] = image[int(bb[1]):int(bb[3]+1), int(bb[0]):int(bb[2]+1), :]
-                im = cv2.bilateralFilter(box['image'], 7, 40, 40)
-                im = cv2.bilateralFilter(im, 7, 40, 40)
-                im = cv2.cvtColor(cv2.resize(im, (128, 128), interpolation=cv2.INTER_CUBIC), cv2.COLOR_RGB2HSV)
-                im1 = im[:64, :64, :]
-                im2 = im[:64, 64:, :]
-                im3 = im[64:, :64, :]
-                im4 = im[64:, 64:, :]
-                im5 = im[32:-32, 32:-32]
-                hist1 = [cv2.calcHist([im1], [c], hist_mask[cls][:64, :64], [64], [0, 256]) for c in range(3)]
-                hist2 = [cv2.calcHist([im2], [c], hist_mask[cls][:64, 64:], [64], [0, 256]) for c in range(3)]
-                hist3 = [cv2.calcHist([im3], [c], hist_mask[cls][64:, :64], [64], [0, 256]) for c in range(3)]
-                hist4 = [cv2.calcHist([im4], [c], hist_mask[cls][64:, 64:], [64], [0, 256]) for c in range(3)]
-                hist5 = [cv2.calcHist([im5], [c], hist_mask[cls][32:-32, 32:-32], [64], [0, 256]) for c in range(3)]
-                hist = hist1 + hist2 + hist3 + hist4 + hist5
-                box['hist'] = hist
 
             for p in last_preds:
                 bb = p['box2d']
@@ -419,7 +438,85 @@ class Tracker:
                 if area_inside <=area*self.frame_out_thresh[cls]:
                     n_frame_out += 1
                     continue
-                adjusted_preds.append({'id': p['id'], 'box2d': box2d_inside, 'score': p['score'], 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']})
+                adjusted_pred = {'id': p['id'], 'box2d': box2d_inside, 'score': p['score'], 'mv': p['mv'], 'scale': p['scale'], 'occlusion': p['occlusion'], 'image': p['image'], 'hist': p['hist']}
+                adjusted_preds.append(adjusted_pred)
+
+                # check surrounding area to find interpolation candidates
+                iw = box2d_inside[2] - box2d_inside[0]
+                ih = box2d_inside[3] - box2d_inside[1]
+                r = min(iw/(ih+1e-10), ih/(iw+1e-10))
+                size_flag = r>0.2
+                if cls=='Car':
+                    size_flag = size_flag and iw/(ih+1e-10)>0.5
+                else:
+                    size_flag = size_flag and iw/(ih+1e-10)<2.0
+
+                if p['occlusion']==0 and area_inside>1024*1.2 and size_flag:
+                    ew = w*0.6 if cls=='Car' else w*0.5
+                    eh = h*0.6 if cls=='Car' else h*0.5
+                    ex_bb = (cnt[0]-ew, cnt[1]-eh, cnt[0]+ew, cnt[1]+eh)
+                    bb_image = self.get_bb_image(image, box2d_inside)
+                    missing = True
+                    for box in boxes:
+                        tmp_bb = copy.deepcopy(box['box2d'])
+                        curr_iou = self.iou(ex_bb, tmp_bb)
+                        iou_thresh = 0.1 if cls=='Pedestrian' else 0
+                        if curr_iou>iou_thresh:
+                            missing = False
+                            break
+                    if missing:
+                        hist = self.get_hist(bb_image, hist_mask[cls])
+                        similarity = self.get_similality(hist, p['hist'])
+                        checked = set([(0, 0)])
+                        pos = (0, 0)
+                        sx = max(1, w//8)
+                        sy = max(1, h//8)
+                        prev_similarity = similarity
+                        count = 0
+                        while True:
+                            updated = False
+                            for tpos in [(pos[0]-sx, pos[1]), (pos[0], pos[1]-sy), (pos[0]+sx, pos[1]), (pos[0], pos[1]+sy)]:
+                                if tpos in checked:
+                                    continue
+                                tbox2d_inside = [box2d_inside[0]+tpos[0], box2d_inside[1]+tpos[1], box2d_inside[2]+tpos[0], box2d_inside[3]+tpos[1]]
+                                if tbox2d_inside[0]<0 or tbox2d_inside[2]>=self.image_size[0] or tbox2d_inside[1]<0 or tbox2d_inside[3]>=self.image_size[1]:
+                                    continue
+                                tbb_image = self.get_bb_image(image, tbox2d_inside)
+                                thist = self.get_hist(tbb_image, hist_mask[cls])
+                                tsim = self.get_similality(thist, p['hist'])
+                                if tsim>similarity:
+                                    similarity = tsim
+                                    pos = tpos
+                                    bb_image = tbb_image
+                                    updated = True
+                            if (not updated) or count>8:
+                                break
+                            else:
+                                count += 1
+                        thresh = 0.85 if cls=='Pedestrian' else 0.9
+                        if similarity>thresh:
+                            # print(cls, prev_similarity, similarity)
+                            # plt.imshow(bb_image)
+                            # plt.show()
+                            interp = 1
+                            if 'intep' in p.keys():
+                                interp = p['interp'] + 1
+                            if interp<=1:
+                                ibb = [box2d_inside[0]+pos[0], box2d_inside[1]+pos[1], box2d_inside[2]+pos[0], box2d_inside[3]+pos[1]]
+                                # ibb = [max(0, ibb[0]), min(0, ibb[1]), max(self.image_size[0]-1, ibb[2]), max(self.image_size[1]-1, ibb[3])]
+                                boxes.append({'box2d': ibb, 'score': p['score'], 'interp': interp})
+
+            # prepare image inside each bounding box
+            for box in boxes:
+                # just for evaluation with GT bboxes
+                if 'score' not in box.keys():
+                    box['score'] = -1
+                bb = box['box2d']
+                im = self.get_bb_image(image, bb)
+                box['image'] = im
+                im = self.smooth_image(im)
+                hist = self.get_hist(im, hist_mask[cls])
+                box['hist'] = hist
 
             # match objects in the previous frame and the current frame and assign IDs
             box_map, cost = self.hungarian_match(adjusted_preds, boxes, cls)
@@ -453,14 +550,40 @@ class Tracker:
                     mv = [0, 0]
                     scale = [1, 1]
                 bb = pred[cls][i]['box2d']
-                pred[cls][i] = {'box2d': pred[cls][i]['box2d'], 'score': pred[cls][i]['score'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
+                pp = {'box2d': pred[cls][i]['box2d'], 'score': pred[cls][i]['score'], 'id': next_ids[i], 'mv': mv, 'scale': scale, 'occlusion': 0, 'image': pred[cls][i]['image'], 'hist': pred[cls][i]['hist']}
+                if 'interp' in pred[cls][i].keys():
+                    pp['interp'] = pred[cls][i]['interp']
+                pred[cls][i] = pp
 
             # generate next prediction data
             for i in range(len(box_map)):
                 # discard too old occluded objects kept in the tracker
                 if box_map[i]==-1 and adjusted_preds[i]['occlusion']<self.max_occ_frames:
                     bb = adjusted_preds[i]['box2d']
-                    pred[cls].append({'box2d': bb, 'score': adjusted_preds[i]['score'], 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']})
+                    pp = {'box2d': bb, 'score': adjusted_preds[i]['score'], 'id': adjusted_preds[i]['id'], 'mv': adjusted_preds[i]['mv'], 'scale': adjusted_preds[i]['scale'], 'occlusion': adjusted_preds[i]['occlusion']+1, 'image': adjusted_preds[i]['image'], 'hist': adjusted_preds[i]['hist']}
+                    if 'interp' in adjusted_preds[i]:
+                        pp['interp'] = adjusted_preds[i]['interp']
+                    pred[cls].append(pp)
+
+            # filter out matching with too low similarity
+            tpred = []
+            for tp in pred[cls]:
+                if tp['id'] in map(lambda p: p['id'], last_preds):
+                    pp = list(filter(lambda p: p['id']==tp['id'], last_preds))[0]
+                    hist1 = tp['hist']
+                    hist2 = pp['hist']
+                    similarity = self.get_similality(hist1, hist2)
+                    if similarity>0.2:
+                        tpred.append(tp)
+                    else:
+                        pp['occlusion'] = 1
+                        tpred.append(pp)
+                        tp['id'] = self.last_id + 1
+                        self.last_id += 1
+                        tpred.append(tp)
+                else:
+                    tpred.append(tp)
+            pred[cls] = tpred
 
         # keep object prediction information in the tracker
         self.predictions.append(pred)
