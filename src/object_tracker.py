@@ -11,17 +11,15 @@ import copy
 import json
 import time
 import shutil
-# import matplotlib.pyplot as plt
 from queue import Queue
 from glob import glob
 from argparse import ArgumentParser
 from statistics import mean
 from concurrent.futures import ProcessPoolExecutor
-# from keras_retinanet.utils.image import adjust_brightness
 
 
 class Tracker:
-    def __init__(self, image_size, max_patterns=10000000, max_time=0.1):
+    def __init__(self, image_size):
         self.init_predictions = {'Car': [], 'Pedestrian': []}
         self.predictions = [self.init_predictions]; # past predictions in the format {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
         self.image_size = image_size # input frame resolution: (width, height)
@@ -41,11 +39,9 @@ class Tracker:
     def iou(self, a, b):
         if a[0] >= a[2] or a[1] >= a[3] or b[0] >= b[2] or b[1] >= b[3]:
             return 0.0
-        # area_i = intersection(a, b)
         x, y = max(a[0], b[0]), max(a[1], b[1])
         w, h = min(a[2], b[2]) - x, min(a[3], b[3]) - y
         area_i = 0 if w<0 or h<0 else w*h
-        # area_u = union(a, b, area_i)
         area_a, area_b = (a[2]-a[0]) * (a[3]-a[1]), (b[2]-b[0]) * (b[3]-b[1])
         area_u = area_a + area_b - area_i
         return area_i / (area_u + 1e-6)
@@ -387,7 +383,6 @@ class Tracker:
                     cnts = cnts[::-1]
                     while cnts[-1] is None:
                         cnts = cnts[:-1]
-                    # print(cls, cnts)
                     ts = []
                     for i in range(len(cnts)):
                         if cnts[i] is not None:
@@ -495,15 +490,11 @@ class Tracker:
                                 count += 1
                         thresh = 0.85 if cls=='Pedestrian' else 0.9
                         if similarity>thresh:
-                            # print(cls, prev_similarity, similarity)
-                            # plt.imshow(bb_image)
-                            # plt.show()
                             interp = 1
                             if 'intep' in p.keys():
                                 interp = p['interp'] + 1
                             if interp<=1:
                                 ibb = [box2d_inside[0]+pos[0], box2d_inside[1]+pos[1], box2d_inside[2]+pos[0], box2d_inside[3]+pos[1]]
-                                # ibb = [max(0, ibb[0]), min(0, ibb[1]), max(self.image_size[0]-1, ibb[2]), max(self.image_size[1]-1, ibb[3])]
                                 boxes.append({'box2d': ibb, 'score': p['score'], 'interp': interp})
 
             # prepare image inside each bounding box
@@ -538,13 +529,6 @@ class Tracker:
                     prev_cnt = [(prev_box2d[0]+prev_box2d[2])//2, (prev_box2d[1]+prev_box2d[3])//2]
                     cnt = [(box2d[0]+box2d[2])//2, (box2d[1]+box2d[3])//2]
                     mv = [cnt[0]-prev_cnt[0], cnt[1]-prev_cnt[1]]
-
-                    # calculate how fast the size of each object got scaled
-                    # sx = (box2d[2]-box2d[0]+1) / (prev_box2d[2]-prev_box2d[0]+1)
-                    # sy = (box2d[3]-box2d[1]+1) / (prev_box2d[3]-prev_box2d[1]+1)
-
-                    # take sqrt to suppress outliers
-                    # scale = [np.sqrt(np.sqrt(sx)), np.sqrt(np.sqrt(sy))]
                     scale = [1, 1]
                 else:
                     mv = [0, 0]
