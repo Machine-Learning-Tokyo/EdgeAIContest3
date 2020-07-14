@@ -48,19 +48,21 @@ First, we have trained the model using all available classes in training data (`
 
 After a comprehensive visual analysis, we have seen that the model confuses some classes. For instance, the model predicts the "Bus" as "Car". This kind of mis-detections increase the False Positive (which leads to lower MOTA metric).  Then, we concluded that it may be better to include the similar classes on top of previous classes: (`Pedestrian`, `Car`) + (`Bus`, `Truck`, `Svehicle`). The newly added classes were confused with Pedestrian class. By including (and re-training the detection model) we prevent those confusions. 
 
-Training details: 
-RetinaNet model with ResNet101 backbone (pre-trained on ImageNet)
+### Training details: 
 
-Didn't resize the video frames (still images) which had the shape of `1936x1216x3`. 
+**Backbone model:** ResNet101 (pre-trained on ImageNet)
 
-Learning rate: `1e-5` 
-Augmentations: rotation `(-0.2, 0.2)`, translation `(-0.2, 0.2)`, shear `(-0.2, 0.2)`, scaling `(0.7, 1.4)`, horizontal flip (with `0.5` probability).
+**Image resizing:** didn't resize the video frames (still images) which had the shape of `1936x1216x3`. 
 
-Classes: `Pedestrian`, `Car`, `Truck`, `Bus`, `Svehicle`
+**Learning rate:** `1e-5` 
 
-Trained for 100 epochs. Epoch 15 snapshot has been chosen (we didn't consider the small mAP score differences between different snapshots, because doing this may lead us to overfit on validation dataset). Epoch 15 had AP (average precision) for `Pedestrian: 0.7713` and for `Car: 0.9244`.
+**Augmentations:** rotation `(-0.2, 0.2)`, translation `(-0.2, 0.2)`, shear `(-0.2, 0.2)`, scaling `(0.7, 1.4)`, horizontal flip (with `0.5` probability).
 
-Training data format: we have used csv data format: `image_fpath,x1,y1,x2,y2,class` (please check keras-retinanet repository).
+**Classes:** `Pedestrian`, `Car`, `Truck`, `Bus`, `Svehicle`
+
+**Epochs:** trained for 100 epochs. Epoch 15 snapshot has been chosen (we didn't consider the small mAP score differences between different snapshots, because doing this may lead us to overfit on validation dataset). Epoch 15 had AP (average precision) for `Pedestrian: 0.7713` and for `Car: 0.9244`.
+
+**Training data format:** we have used csv data format: `image_fpath,x1,y1,x2,y2,class` (please check keras-retinanet repository).
 
 
 
