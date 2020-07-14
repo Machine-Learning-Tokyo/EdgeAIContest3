@@ -1,44 +1,72 @@
-# Introduction 
-…this part should be filled … introduce MLT, MLT's ranking, prize we have won, mention contest details (who organized the contest, total number of participants, number of gold/silver/bronze medal receivers and winners, etc)
+# Introduction (to be filled)
+
+introduce MLT
+
+MLT's ranking, prize we have won
+
+mention contest details (who organized the contest, total number of participants, number of gold/silver/bronze medal receivers and winners, etc)
 
 
-# Edge AI contest task definition
-…this part should be filled … problem definition, training/test data, number of images per class, evaluation metric - MOTA - and the formula…
+# Edge AI contest task definition (to be filled)
+problem definition
+
+training/test data
+
+number of images per class
+
+evaluation metric - MOTA
 
 
 
 
 # How did we tackle the task?
-We discussed and decided to divide the main task into sub-tasks. The primer aim was to be able to work on different sub-tasks independently, i.e. not sequential - we should not have to wait to finish a subtask before starting the next one. According to these assumptions, we defined two sub-tasks:
-object detection sub-task: the training videos are used as training data and performance is evaluated considering only object detection performance - mAP (mean Average Precision, Average Precision per class)
-object tracker sub-task: although the final evaluation would consider the object detector and object tracker's performance, we decided to use the ground truth detection labels (bbox coordinates of objects) to develop object tracker.
+We discussed and decided to divide the main task into sub-tasks. The primery aim was to be able to work on different sub-tasks independently, i.e. not sequential - we should not have to wait to finish a subtask before starting the next one. According to these assumptions, we defined two sub-tasks:
+
+- object detection sub-task: the training videos are used as training data and performance is evaluated considering only object detection performance - mAP (mean Average Precision, Average Precision per class)
+
+- object tracker sub-task: although the final evaluation would consider the object detector and object tracker's performance, we decided to use the ground truth detection labels (bbox coordinates of objects) to develop object tracker.
 
 
 
-## 1. Pre-processing 
-…this part should be filled …
+## 1. Pre-processing (to be filled)
+
 data split: train/validation
+
 split the video into frames, etc
 
 ## 2. Object Detection
-There are mainly two types of deep learning based object detection algorithms: two-stage and single-stage/single-shot. The former were SOTA object detection algorithms for a long time which are R-CNN, Fast R-CNN, Faster R-CNN. Although, two-stage detectors are very robust, they time-consuming. Since the contest was about edge AI, we consider to use single-stage detectors. SSD, YOLO, RetinaNet are the two-stage detectors. The special loss function was introduced in RetinaNet paper - focal loss. We have chosen RetinaNet detector because we already had an experience on training RetinaNet model. 
+There are mainly two types of deep learning based object detection algorithms: 
+
+- two-stage obejct detectors: R-CNN, Fast R-CNN, Faster R-CNN 
+
+- single-stage/single-shot object detectors: SSD, YOLO, RetinaNet. 
+
+
+Because single-stage object detectors are faster and since the contest was about edge AI, we decided to use single-stage object detector - RetinaNet. We have chosen RetinaNet detector because we already had an experience on training RetinaNet model. 
+
 First, we have trained the model using all available classes in training data (Pedestrian, Car, Truck, Signs, Svehicle, Bus, Train, Motorbike, Signal, Bicycle) and fine tuned on only two classes (Pedestrian and Car) since only those classes would be considered during the evaluation. Then, we thought it could be better to train on corresponding classes (Pedestrian and Car) to get rid of unnecessary class predictions (which could make it easier for detector to predict correct classes). We have confirmed that this works better than the former one in terms of mAP score on validation set. Pedestrian: 0.7713 AP & 
 Car: 0.9244 AP.
+
 After a comprehensive visual analysis, we have seen that the model confuses some classes. For instance, the model predicts the "Bus" as "Car". This kind of mis-detections increase the False Positive (which leads to lower MOTA metric).  Then, we concluded that it may be better to include the similar classes on top of previous classes: [Pedestrian, Car] + [Bus, Truck, Svehicle]. The newly added classes were confused with Pedestrian class. By including (and re-training the detection model) we prevent those confusions. 
+
 Training details: 
 RetinaNet model with ResNet101 backbone (pre-trained on ImageNet)
-Didn't resize the video frames (still images) which had the shape of 1936x1216x3. 
-Learning rate: 1e-5 
-Augmentations: rotation (-0.2, 0.2), translation (-0.2, 0.2), shear (-0.2, 0.2), scaling (0.7, 1.4), horizontal flip (with 0.5 probability).
-Classes:    Pedestrian, Car, Truck, Bus, Svehicle
-Trained for 100 epochs. Epoch 15 snapshot has been chosen (we didn't consider the small mAP score differences between different snapshots, because doing this may lead us to overfit on validation dataset). Epoch 15 had AP (average precision) for "Pedestrian": 0.7713 and for "Car": 0.9244.
-Training data format: we have used csv data format: image_fpath,x1,y1,x2,y2,class (please check keras-retinanet repository).
+
+Didn't resize the video frames (still images) which had the shape of `1936x1216x3`. 
+
+Learning rate: `1e-5` 
+Augmentations: rotation `(-0.2, 0.2)`, translation `(-0.2, 0.2)`, shear `(-0.2, 0.2)`, scaling `(0.7, 1.4)`, horizontal flip (with `0.5` probability).
+
+Classes: `Pedestrian`, `Car`, `Truck`, `Bus`, `Svehicle`
+
+Trained for 100 epochs. Epoch 15 snapshot has been chosen (we didn't consider the small mAP score differences between different snapshots, because doing this may lead us to overfit on validation dataset). Epoch 15 had AP (average precision) for "Pedestrian": `0.7713` and for "Car": `0.9244`.
+
+Training data format: we have used csv data format: `image_fpath,x1,y1,x2,y2,class` (please check keras-retinanet repository).
 
 
 
 
-## 3. Object Tracking
-… (this part should be filled) …
+## 3. Object Tracking (to be filled)
 
 
 
