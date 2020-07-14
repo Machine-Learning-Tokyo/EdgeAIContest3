@@ -2,7 +2,7 @@
 
 introduce MLT
 
-MLT's ranking, prize we have won
+MLT's ranking, prize
 
 mention contest details (who organized the contest, total number of participants, number of gold/silver/bronze medal receivers and winners, etc)
 
@@ -101,8 +101,3 @@ less submission could help us not to overfit to public score, etc.
 
 
 
-
-
-
-References: 
-https://lilianweng.github.io/lil-log/2018/12/27/object-detection-part-4.html
