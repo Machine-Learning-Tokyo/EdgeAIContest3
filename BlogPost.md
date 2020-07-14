@@ -72,24 +72,33 @@ Training data format: we have used csv data format: `image_fpath,x1,y1,x2,y2,cla
 
 
 ## 4. Combining object detection and object tracking - prediction, post-processing.
-Test time augmentations: during the inference instead of feeding the original image only, we fed the batch of images: original image + augmented versions. As for the test time augmentation we have tried "horizontal flip", "brightening: brighten the image", "darken: darken the image", "right/left crop: crop the right/left region of an image". Among these test time augmentations we find only horizontal flip helpful. We could not exploit all of them because of restricted inference time per frame.
-Confidence scores: we have fixed the confidence threshold as 0.5 for original image predictions. However, for flipped version (basically for every test time augmentations we have tried) of the image, we defined a new parameter - conf_score_bias=0.1 -  which is added to 0.5 to yield a confidence threshold for predictions from flipped version of input image. This parameter (conf_score_bias) implies that we should not give similar chance for original and augmented image prediction, i.e. accept the predictions from augmented version if and only if it is bigger than 0.6 which means it is more confident.
-Combining predictions for different image versions: since we have fed 2 images (original + horizontally flipped) to the model, we get multiple predictions, i.e. we had to merge object bounding boxes. We have used two different nms methods: (we call it) local nms and global nms. Local nms is applied to predictions got from different batch images. Global nms is applied after merging (concatenating) the predictions from original and flipped input images. For local nms we have used IoU=0.8 and for global nms we have used IoU=0.5.
-post-processing heuristic: during the visual analysis, we found that there are no objects at very top and very bottom part of frame at all. Thus, we have applied this heuristic as a post-processing; discard any predictions if y-coordinate was above 365 or below 851.
+- Test time augmentations: during the inference instead of feeding the original image only, we fed the batch of images: original image + augmented versions. As for the test time augmentation we have tried "horizontal flip", "brightening: brighten the image", "darken: darken the image", "right/left crop: crop the right/left region of an image". Among these test time augmentations we find only horizontal flip helpful. We could not exploit all of them because of restricted inference time per frame.
+
+
+- Confidence scores: we have fixed the confidence threshold as 0.5 for original image predictions. However, for flipped version (basically for every test time augmentations we have tried) of the image, we defined a new parameter - conf_score_bias=0.1 -  which is added to 0.5 to yield a confidence threshold for predictions from flipped version of input image. This parameter (conf_score_bias) implies that we should not give similar chance for original and augmented image prediction, i.e. accept the predictions from augmented version if and only if it is bigger than 0.6 which means it is more confident.
+
+- Combining predictions for different image versions: since we have fed 2 images (original + horizontally flipped) to the model, we get multiple predictions, i.e. we had to merge object bounding boxes. We have used two different nms methods: (we call it) local nms and global nms. Local nms is applied to predictions got from different batch images. Global nms is applied after merging (concatenating) the predictions from original and flipped input images. For local nms we have used IoU=0.8 and for global nms we have used IoU=0.5.
+
+- Post-processing heuristic: during the visual analysis, we found that there are no objects at very top and very bottom part of frame at all. Thus, we have applied this heuristic as a post-processing; discard any predictions if y-coordinate was above 365 or below 851.
 
 
 
 # What we have tried and didn't work?
-Test time augmentations:  "brightening", "darkening", "right crop", "left crop" augmentations did not work well. Only "horizontal flip" helped to increase the overall performance.
-Adaptive nms threshold for "Pedestrian" class: use adaptive nms IoU threshold according to the number of detections. This was due to crowded scenes, i.e., if there are a lot of pedestrian in the frame then probably their bounding boxes should be overlapping more compared to less crowded frames. We tried this, but could not fine-tune well to get better MOTA score.
-Receject confidence score outliers: we had a plan to reject object outliers according to their confidence score considering that the objects in the same frame should be visible with similar probability. However, this didn't help either because we did not have enough time to fine-tune or because it really does not help.
-Classification phase: we considered to train another model to classify the object detection predictions into "Pedestrian" and "Car" classes (binary classification). This could help to curate object detection results as well as object tracker when matching inter-frame objects. However, we did not have enough time to try this. 
-… some failed trials form object tracker can be added here …
+- Test time augmentations:  "brightening", "darkening", "right crop", "left crop" augmentations did not work well. Only "horizontal flip" helped to increase the overall performance.
+
+- Adaptive nms threshold for "Pedestrian" class: use adaptive nms IoU threshold according to the number of detections. This was due to crowded scenes, i.e., if there are a lot of pedestrian in the frame then probably their bounding boxes should be overlapping more compared to less crowded frames. We tried this, but could not fine-tune well to get better MOTA score.
+
+- Reject confidence score outliers: we had a plan to reject object outliers according to their confidence score considering that the objects in the same frame should be visible with similar probability. However, this didn't help either because we did not have enough time to fine-tune or because it really does not help.
+
+- Classification phase: we considered to train another model to classify the object detection predictions into "Pedestrian" and "Car" classes (binary classification). This could help to curate object detection results as well as object tracker when matching inter-frame objects. However, we did not have enough time to try this. 
+
+- some failed trials from object tracker can be added here
 
 
 
-# Conclusion
-… conclusion (less submission could help us not to overfit to public score)…
+# Conclusion (to be filled)
+
+less submission could help us not to overfit to public score, etc.
 
 
 
