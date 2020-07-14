@@ -52,8 +52,6 @@ class ScoringService(object):
             cls.expansion = 0  # DO NOT USE
             cls.scales = [0.2]  #  DO NOT CHANGE
             cls.small_object_area = 2000000
-            cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
-            cls.adaptive_threshold_coefficient = 1  # DON'T USE ADAPTIVE THR !!! =1 means no adaptive thr
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
             cls.apply_adaptive_pedestrian_nms = False
 
