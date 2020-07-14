@@ -51,7 +51,6 @@ class ScoringService(object):
             cls.threshold_car = 0.5  # DO NOT CHANGE
             cls.expansion = 0  # DO NOT USE
             cls.scales = [0.2]  #  DO NOT CHANGE
-            cls.small_object_area = 2000000
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
             cls.apply_adaptive_pedestrian_nms = False
 
