@@ -126,11 +126,11 @@ The disappeared objects are also kept in the tracker for a while and can be matc
 
 - Post-processing heuristic: during the visual analysis, we found that there are no objects at very top and very bottom part of frame at all. Thus, we have applied this heuristic as a post-processing; discard any predictions if y-coordinate was above `365` or below `851`.
 
-- Here is a sample output from Object Detection.  
+- Here is a sample output from Object Detection.
 Green box is Car, while Red box is Pedestrian.
 ![object_detection](object_detection.gif)
 
-- Here is sample output from Object Tracking.  
+- Here is sample output from Object Tracking.
 The color change when the assigned box id change.
 ![object_tracking](object_tracking.gif)
 
