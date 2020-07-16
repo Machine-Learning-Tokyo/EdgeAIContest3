@@ -147,7 +147,6 @@ We used the KPT (Keep, Problems, Try) format to do a lookback on our project. We
 We worked for total of 15 days (mostly Saturday/Sunday), except for last week of submission.
 The last week was quite busy. Everyone came online after office work on video call, which sometimes went all the way till midnight.
 
-
 ## Keep
 
 - Regular Project Syncup Meetings with simple format
@@ -163,6 +162,7 @@ The last week was quite busy. Everyone came online after office work on video ca
 - Fine tuning the model to a given dataset may lead to overfitting. So keeping a balance of submission results and overfitting is necessary.
 - Running the entire pipeline for submission once is quite important to keep team motivation.
 - Documentation of evaluation results in tabular format while fine tuning a model.
+![parameter_training](parameter_training.png)
 
 ## Problems
 - Lack of analysis of provided code can lead to downfalls at a later stage as we near the deadline. Eg beforehand analysis of videos / reading the provided scripts and understanding them completely is equally important as just using them.
