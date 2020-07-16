@@ -110,7 +110,7 @@ We added some virtual objects where the objects matched to these virtual objects
 The disappeared objects are also kept in the tracker for a while and can be matched to some objects in the subsequent frames.
 
 
-## 4. Combining object detection and object tracking - prediction, post-processing.
+## 4. Combining object detection and object tracking: prediction phase and post-processing.
 - Test time augmentations: during the inference instead of feeding the original image only, we fed the batch of images: original image + augmented versions. As for the test time augmentation we have tried `horizontal flip`, `brightening`, `darkening`, `right/left crop: crop the right/left region of an image`. Among these test time augmentations we find only horizontal flip helpful. We could not exploit all of them because of restricted inference time per frame.
 
 
