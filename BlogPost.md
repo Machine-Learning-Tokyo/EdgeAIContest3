@@ -53,9 +53,15 @@ We discussed and decided to split the main task into two sub-tasks. The primary 
 
 ## 1. Pre-processing (to be filled)
 
-data split: train/validation
+We split the video frames into individual pictures and saved in .png format. So each video generated 600 images. We used the ffmpeg tool to do this in a bash script to run on all the videos. The reason to use ffmpeg was that the opencv method from jupyter notebook was too slow.
 
-split the video into frames, etc
+We split the entire data as follows : 
+- Training data : train_02 ~ train_24
+- Validation data : train_00, train_01
+
+We also converted the given annotation data to a keras-retinanet's CSV data format.
+
+We used 5 classes out of total 10 classes to train our model.
 
 ## 2. Object Detection
 There are mainly two types of deep learning based object detection algorithms:
