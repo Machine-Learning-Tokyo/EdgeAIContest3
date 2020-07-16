@@ -6,7 +6,7 @@
 MLT is a Tokyo-based nonprofit organization dedicated to democratizing Machine Learning. We are a team of ML Engineers and Researchers and a community of more than 6000 people.
 Our mission is to create, grow and sustain an inclusive, collaborative and engineering focused environment for students and professionals. Together we facilitate opportunities to learn, study and work on Machine Learning and Deep Learning projects and support individuals to reach their fullest potential.
 
-In this path of learning pratical skills and experience, we encourage everyone to take part into collaborative projects and competitions (*example ~ Agriculture project- ...*).
+In this path of learning practical skills and experience, we encourage everyone to take part into collaborative projects and competitions (*example ~ Agriculture project- ...*).
 This blog summarizes the work of 5 MLT members who take part into the [The 3rd AI Edge Contest (Algorithm Contest 2)](https://signate.jp/competitions/256).
 
 We would like to thank [Signate](https://signate.jp/) for hosting this exciting competition. Please check out all the ongoing competitions to gain experience with a large number of datasets.
@@ -14,7 +14,7 @@ We would like to thank [Signate](https://signate.jp/) for hosting this exciting 
 As a Tokyo based organisation, having the opportunity to work on **“a made in” Tokyo dataset** was really motivating and gave us the feeling to work on a real world project compared to other competitions.
 On top of that, the field of [MoT](https://en.wikipedia.org/wiki/Multiple_object_tracking) is still a hot research topic, and certainly very challenging by its complexity and application.
 
-After 3 months of hard and fully remote work, we achieved a third position in the competition, over 35 teams (total of 305 participants). We would like to congratulate all the other teams for the hard competition as at even at the very last minute we were at the 5th position. Some solutions were disclosed in the [competition forum](https://signate.jp/competitions/256/discussions/solution-of-irafm-ai-team).
+After 3 months of hard and fully remote work, we achieved a third position in the competition, over 35 teams (total of 305 participants). We would like to congratulate all the other teams for the hard competition as even at the very last minute we were at the 5th position. Some solutions were disclosed in the [competition forum](https://signate.jp/competitions/256/discussions/solution-of-irafm-ai-team).
 
 ![final_ranking.png](Signate_final_results.png)
 
@@ -34,7 +34,7 @@ number of images per class ?
 
 ![overview](notebook/all_video.png)
 
-No test set were provided, all the evaluation was done on Signate side, as we upload our source code for each submission. The criteria for evaluation was composed into 2 parts an Object Detection score (IoU) and a Tracking evalution match-missmatch combine into 1 score: MOTA. Please check the evaluation details on [the competition page](https://signate.jp/competitions/256#evaluation).
+No test set were provided, all the evaluation was done on Signate side, as we upload our source code for each submission. The criteria for evaluation was composed into 2 parts an Object Detection score (IoU) and a Tracking evaluation match-mismatch combine into 1 score: MOTA. Please check the evaluation details on [the competition page](https://signate.jp/competitions/256#evaluation).
 
 ![mota](MOTA_formula.png)
 evaluation metric - MOTA
@@ -43,11 +43,11 @@ evaluation metric - MOTA
 
 
 # How did we tackle the task?
-We discussed and decided to split the main task into two sub-tasks. The primery aim was to be able to work on different sub-tasks independently, i.e. not sequential - we should not have to wait to finish a first subtask to start the next.
+We discussed and decided to split the main task into two sub-tasks. The primary aim was to be able to work on different sub-tasks independently, i.e. not sequential - we should not have to wait to finish a first subtask to start the next.
 
 - object detection sub-task: the training videos are used as training data and performance is evaluated considering only object detection performance - mAP (mean Average Precision, Average Precision per class)
 
-- object tracker sub-task: although the final evaluation would consider the object detector and object tracker's performance, we decided to use the ground truth detection labels (bbox coordinates of objects) to develop object tracker.
+- object tracker sub-task: although the final evaluation would consider the object detector and object tracker's performance, we decided to use the ground truth detection labels (bbox coordinates of objects) to develop the object tracker.
 
 
 
@@ -135,9 +135,38 @@ The disappeared objects are also kept in the tracker for a while and can be matc
 
 
 
-# Conclusion (to be filled)
+# Conclusion (Lessons learned)
+We used the KPT (Keep, Problems, Try) format to do a lookback on our project. We would like to share our lessons learned to everyone. 
 
-less submission could help us not to overfit to public score, etc.
+We worked for total of 15 days (mostly Saturday/Sunday), except for last week of submission.
+The last week was quite busy. Everyone came online after office work on video call, which sometimes went all the way till midnight.
 
 
+## Keep
 
+- Regular Project Syncup Meetings with simple format
+  - Done Tasks
+  - ToDo / Waiting (Next Steps)
+- Git Workflow (Best Practices).
+  - In exploration phase : Individual member creates his / her own feature branch
+  - In collaboration phase : All individual developments merge to develop branch and all members work on this branch from that point.
+  - All submissions to be made from the master branch.
+
+- Keep on participating in hackathons as it provides an opportunity to connect and discuss with people.
+- Task Assignment should be clear and non overlapping. This provides smooth progress.
+- Fine tuning the model to a given dataset may lead to overfitting. So keeping a balance of submission results and overfitting is necessary.
+- Running the entire pipeline for submission once is quite important to keep team motivation.
+- Documentation of evaluation results in tabular format while fine tuning a model.
+
+## Problems
+- Lack of analysis of provided code can lead to downfalls at a later stage as we near the deadline. Eg beforehand analysis of videos / reading the provided scripts and understanding them completely is equally important as just using them.
+
+- Late integration always leads to problems. So it is always a nice idea to integrate as a skeleton code first and then start working on a project. In fact, a better way would be to just define everything as dummy and write skeleton code. But the problem even with this approach is that the specifications about model and architecture should be fixed beforehand. If the project involves exploration, then it might be difficult to write skeleton code right from start.
+
+- System interdependence can be explored if there is sufficient time after integration. Eg. in our case, the object tracker could have used information from the object detector and vice versa.
+
+## Try
+- Cleaning and Re-Annotation of given dataset.
+- Automation pipeline for testing various combinations of parameters for fine tuning the model.
+- More Modular code to plug in any model other than RetinaNet.
+- Choosing the training and validation dataset very carefully when limited data is provided.
