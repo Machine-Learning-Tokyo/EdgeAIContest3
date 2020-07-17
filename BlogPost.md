@@ -7,7 +7,7 @@ MLT is a Tokyo-based nonprofit organization dedicated to democratizing Machine L
 Our mission is to create, grow and sustain an inclusive, collaborative and engineering focused environment for students and professionals. Together we facilitate opportunities to learn, study and work on Machine Learning and Deep Learning projects and support individuals to reach their fullest potential.
 
 In this path of learning practical skills and experience, we encourage everyone to take part into collaborative projects and competitions (*example ~ Agriculture project- ...*).
-This blog summarizes the work of 5 MLT members who take part into the [The 3rd AI Edge Contest (Algorithm Contest 2)](https://signate.jp/competitions/256).
+This blog summarizes our (5 MLT members) work and experience for taking part into the [The 3rd AI Edge Contest (Algorithm Contest 2)](https://signate.jp/competitions/256).
 
 We would like to thank [Signate](https://signate.jp/) for hosting this exciting competition. Please check out all the ongoing competitions to gain experience with a large number of datasets.
 
@@ -55,7 +55,7 @@ We discussed and decided to split the main task into two sub-tasks. The primary 
 
 We split the video frames into individual pictures and saved in .png format. So each video generated 600 images. We used the ffmpeg tool to do this in a bash script to run on all the videos. The reason to use ffmpeg was that the opencv method from jupyter notebook was too slow.
 
-We split the entire data as follows : 
+We split the entire data as follows :
 - Training data : train_02 ~ train_24
 - Validation data : train_00, train_01
 
@@ -145,15 +145,23 @@ The color change when the assigned box id change.
 
 - some failed trials from object tracker can be added here
 
+# Conclusion
 
+## Conclusion on this project
+This competition was really challenging on the technical side (MOT, training setup for the team) and organisation side (team of 5, corona circumstances).
+Finishing in the podium was really rewarding as we really hard work on these submission. Each member were able to learn new skills and tips, and we are looking forward to pursue our way in implementing ML to solve pratical problem with MLT.
 
-# Conclusion (Lessons learned)
-We used the KPT (Keep, Problems, Try) format to do a lookback on our project. We would like to share our lessons learned to everyone. 
+Concerning this project, we do plan to continue to develop it by:
+1. Fine tuning our solution
+2. **Implementation on edge**:
+We plan to deploy our solution on edge (Jetson Nano - FPGA), and itegrate this module to a bike for example. We can also add so GPS, statistic analysis on the traffics, ...
 
-We worked for total of 15 days (mostly Saturday/Sunday), except for last week of submission.
-The last week was quite busy. Everyone came online after office work on video call, which sometimes went all the way till midnight.
+## Lessons learned
+Here is a list of lesson learned (the hard way  ):
 
-## Keep
+#### What went well:
+
+- An healthy remote planing and meeting is important: We worked for total of 15 days (mostly Saturday/Sunday), except for last week of submission. Though the last week was really busy. Everyone came online after office work on video call, which sometimes went all the way till midnight.
 
 - Regular Project Syncup Meetings with simple format
   - Done Tasks
@@ -168,16 +176,19 @@ The last week was quite busy. Everyone came online after office work on video ca
 - Fine tuning the model to a given dataset may lead to overfitting. So keeping a balance of submission results and overfitting is necessary.
 - Running the entire pipeline for submission once is quite important to keep team motivation.
 - Documentation of evaluation results in tabular format while fine tuning a model.
-![parameter_training](parameter_training.png)
 
-## Problems
+<img src="parameter_training.png" alt="parameter_training" width="600"/>
+
+#### What can be improved:
+
 - Lack of analysis of provided code can lead to downfalls at a later stage as we near the deadline. Eg beforehand analysis of videos / reading the provided scripts and understanding them completely is equally important as just using them.
 
 - Late integration always leads to problems. So it is always a nice idea to integrate as a skeleton code first and then start working on a project. In fact, a better way would be to just define everything as dummy and write skeleton code. But the problem even with this approach is that the specifications about model and architecture should be fixed beforehand. If the project involves exploration, then it might be difficult to write skeleton code right from start.
 
 - System interdependence can be explored if there is sufficient time after integration. Eg. in our case, the object tracker could have used information from the object detector and vice versa.
 
-## Try
+#### What we may try to do in the next project:
+
 - Cleaning and Re-Annotation of given dataset.
 - Automation pipeline for testing various combinations of parameters for fine tuning the model.
 - More Modular code to plug in any model other than RetinaNet.
