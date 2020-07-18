@@ -1,6 +1,8 @@
 # The 3rd AI Edge Contest (Algorithm Contest 2)
 This repository present **MLT Team** solution for the  [The 3rd AI Edge Contest](https://signate.jp/competitions/256).
 
+![object_tracking](object_tracking.gif)
+
 ## Introduction
 First of all thank you to [Signate](https://signate.jp/) for hosting this exciting competition.
 Our team MLT is based in Tokyo and we are really interested in the Edge devices and AI applications at the edge.
@@ -60,13 +62,14 @@ The disappeared objects are also kept in the tracker for a while and can be matc
 There are lot of room for improvement:
 - Better tunned or new batch augmentation.
 - Pedestrian classifier to reduce FP. *(developed but not tuned enough to be used for the submission)*
--
+- Automation pipeline for parameters tunning.
 
 ### What did we learn
+- Public score does not always reflect the private score, and those make the tunning hard.
 - Running dummy inference in the load_model method allows us to reduce inference time.
 - Heuristics are very valuable to increase the score
 - We should have spent some resource on cleaning the dataset
--
+- When you think you're done with data exploration, you're not: **Make summary and clean report.**
 
 ## Data
 Please download data from the competition into the ```data/``` folder:
