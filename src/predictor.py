@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------
+# This file is the sample submission file according to Signate runtime submission format.
+#  Details of the template can be checked on https://signate.jp/features/runtime/detail
+#  Released under Apache License 2.0
+#  Email: machine.learning.tokyo@gmail.com
+# -----------------------------------------------------------
 import tensorflow as tf
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 for device in gpu_devices:
@@ -23,6 +30,9 @@ from collections import defaultdict
 class ScoringService(object):
     @classmethod
     def get_model(cls, model_path='../model/resnet50_csv_06.h5.frozen'):
+        """ Method to load a model by specified file path. 
+            Returns False if model cannot be loaded properly."""
+        
         print("get_model called")
         try:
             cls.min_no_of_frames = 2  # 2 seems more reasonable than 4 !!!
@@ -41,9 +51,6 @@ class ScoringService(object):
             cls.threshold_car = 0.5  # DO NOT CHANGE
             cls.expansion = 0  # DO NOT USE
             cls.scales = [0.2]  #  DO NOT CHANGE
-            cls.small_object_area = 2000000
-            cls.adaptive_threshold_for_pedestrian = False  # DON'T USE ADAPTIVE THR !!!
-            cls.adaptive_threshold_coefficient = 1  # DON'T USE ADAPTIVE THR !!! =1 means no adaptive thr
             cls.apply_heuristic_post_processing = True  # ALWAYS USE THIS HEURISTIC !!!
             cls.apply_adaptive_pedestrian_nms = False
 
@@ -60,6 +67,7 @@ class ScoringService(object):
 
     @classmethod
     def non_max_suppression_with_scores(cls, boxes, probs=None, overlapThresh=0.5):
+        """ Eliminates the bounding boxes according to the prediction scores according to iou threshold) """
         boxes = np.array(boxes)
         probs = np.array(probs)
         # if there are no boxes, return an empty list
@@ -113,6 +121,7 @@ class ScoringService(object):
 
     @classmethod
     def compute_resize_scale(cls, image_shape, min_side=1216, max_side=1936):
+        """ Compute the resize scale value to resize the image """
         (rows, cols, _) = image_shape
         smallest_side = min(rows, cols)
         scale = min_side / smallest_side
@@ -123,24 +132,31 @@ class ScoringService(object):
 
     @classmethod
     def resize_image(cls, img, min_side=1216, max_side=1936):
+        """ Resizes the input image to the given input shape """
         scale = cls.compute_resize_scale(img.shape, min_side=min_side, max_side=max_side)
         img = cv2.resize(img, None, fx=scale, fy=scale)
         return img, scale
 
     @classmethod
     def preprocess_image(cls, x):
+        """ Preprocess the image, i.e. normalize the color (RGB) channels (x-=[103.939, 116.779, 123.68]) """
         x = x.astype(np.float32)
         x -= [103.939, 116.779, 123.68]
         return x
 
     @classmethod
     def draw_bboxes(cls, bboxes, image):
+        """ This is not used in test set, this function utilized during the experimentation - draw the bounding boxes in given image """
         for bbox in bboxes:
             cv2.rectangle(image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0,0,255), 1)
         return image
 
     @classmethod
     def apply_local_nms(cls, clean_bboxes, clean_classes_pred, clean_scores):
+        """ Applies nms on given bounding boxes for merging the different predictions, 
+        This function calls non_max_suppression_with_scores function inside (with overlap of 0.8. 
+        This threshold is high not to lose much bounding boxes because we apply the global nms afterwards).
+        """
         pick_inds = cls.non_max_suppression_with_scores(clean_bboxes, probs=clean_scores, overlapThresh=0.8)
         clean_bboxes = list(clean_bboxes[i] for i in pick_inds)
         clean_classes_pred = list(clean_classes_pred[i] for i in pick_inds)
@@ -150,6 +166,9 @@ class ScoringService(object):
 
     @classmethod
     def apply_heuristics(cls, clean_bboxes_, clean_classes_pred_, clean_scores_, offset_y1_1, offset_y2_1):
+        """ Here we apply some heuristics after all detection processes, 
+        i.e. remove the detected bounding boxes which have y-coordinate < 365 or y-coordinate > 851.
+        """
         clean_bboxes = []
         clean_classes_pred = []
         clean_scores = []
@@ -165,6 +184,9 @@ class ScoringService(object):
 
     @classmethod
     def reject_outliers(cls, data, m=1.5):
+        """ This is not used. But we had a plan to reject some detections according to the scores. 
+        Remove some detection which seems as an outlier in terms of score values.
+        """
         return abs(data - np.mean(data)) < m * np.std(data)
 
     @classmethod
@@ -271,6 +293,8 @@ class ScoringService(object):
 
     @classmethod
     def model_inference(cls, frame, ii):
+        """ Everything is processed here and this function is called from predict function.
+        """
         # frame_darker = adjust_brightness(frame, -0.3)
         # frame_brighter = adjust_brightness(frame, 0.3)
 
@@ -739,6 +763,8 @@ class ScoringService(object):
     
     @classmethod
     def filter_predictions(cls, data):
+        """ Here we apply the filter of objects whose ID doesn’t appear more 3 times on the frame. 
+        This function is used to follow competition rules. """
         id_count = defaultdict(lambda: defaultdict(int))
         for sequence in data:
             for c in sequence:
