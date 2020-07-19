@@ -1,22 +1,21 @@
 # Source Explained
 
-**TODO:**
-
-- [x] Check dependencies of signate_docker
-- [x] Retinanet wrapper
-- [x] Check submission format
-- [x] Submission code integration (as signate)
-- [ ] Submission with new tracker
-- [ ] Object detection tunning
+For the sake of fast development and submissions, the current module for object detection is not yet updated. Please refer to prediction.py to get the latest developement.
 
 ## Content
-Compossed by 1 main process: ```process_video.py```, that takes care of loading the video, setting up the **detection_module**, the **submission_helper**, and **tracking_module**.
+Composed by 1 main process: ```process_video.py```, that takes care of loading the video, setting up the **detection_module**, the **submission_helper**, and **tracking_module**.
+
+- prediction.py: the submission inference src.
 
 - Detection module: is a wrapper of tensorflow implementation, that generate formated prediction.
 
 - Tracking module: generate tracking based on previous-current frame transformation and detection output.
 
 - Submission helper: generate a submission **.json** file.
+
+- Training label generation.py
+
+- Other experimental scripts...
 
 ## Tracker
 #### object_tracker.py
