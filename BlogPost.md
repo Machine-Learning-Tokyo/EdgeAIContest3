@@ -20,7 +20,7 @@ After 3 months of hard and fully remote work, we achieved a third position in th
 
 The following section will explain the contest content, then we will detail our solution architecture, and finally sum-up the learned lesson on this context.
 
-** ---- GIF OBJECT TRACKING ON VIDEO ----- **
+
 
 
 
