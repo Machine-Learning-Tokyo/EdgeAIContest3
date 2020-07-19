@@ -24,7 +24,7 @@ The following section will explain the contest content, then we will detail our 
 
 
 
-# Edge AI contest task definition (to be completed and corrected)
+# Edge AI contest task definition
 
 The purpose of the competition was to develop a robust object tracking subject using the image of a vehicle front camera.
 
