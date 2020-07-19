@@ -1,4 +1,4 @@
-# Introduction (to be completed and corrected)
+# Introduction
 
 
 <img src="nopic.png" alt="nopic" width="200"/>
@@ -51,7 +51,7 @@ We discussed and decided to split the main task into two sub-tasks. The primary 
 
 
 
-## 1. Pre-processing (to be filled)
+## 1. Pre-processing
 
 We split the video frames into individual pictures and saved in .png format. So each video generated 600 images. We used the ffmpeg tool to do this in a bash script to run on all the videos. The reason to use ffmpeg was that the opencv method from jupyter notebook was too slow.
 
@@ -97,7 +97,7 @@ After a comprehensive visual analysis, we have seen that the model gets confused
 
 
 
-## 3. Object Tracking (to be filled)
+## 3. Object Tracking
 
 We formalized the tracking problem as a maximum weighted matching problem for objects in two adjacent frames and solved it using [Hungarian Algorithm](https://en.wikipedia.org/wiki/Hungarian_algorithm#:~:text=Hungarian%20algorithm%20%2D%20Wikipedia-,Hungarian%20algorithm,anticipated%20later%20primal%2Ddual%20methods.).
 
