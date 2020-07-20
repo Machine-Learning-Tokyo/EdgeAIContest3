@@ -1,7 +1,7 @@
 # The 3rd AI Edge Contest (Algorithm Contest 2)
 This repository present **MLT Team** solution for the  [The 3rd AI Edge Contest](https://signate.jp/competitions/256).
 
-![object_tracking](object_tracking.gif)
+![object_tracking](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/object_tracking.gif)
 
 ## Introduction
 First of all thank you to [Signate](https://signate.jp/) for hosting this exciting competition.
@@ -26,7 +26,7 @@ We are planning to continue this project and actually deploying the code on an e
 
 Our solution is composed of two sequential modules: Object detection and Tracking.
 
-![overview](notebook/overview.png)
+![overview](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/notebook/overview.png)
 
 ### 1] Object Detection
 The first step consists of detecting objects in the frame.
@@ -85,7 +85,7 @@ signate download --competition-id=256
 ## Notebook
 This folder contain our **DataExploration notebook**:
 
-![overview](notebook/all_video.png)
+![overview](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/notebook/all_video.png)
 
 ## Source code
 Please refer to [src/README.md](src/README.md) for explanation of our source code.
