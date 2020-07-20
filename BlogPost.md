@@ -34,10 +34,9 @@ number of images per class ?
 
 ![overview](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/notebook/all_video.png)
 
-No test set were provided, all the evaluation was done on Signate side, as we upload our source code for each submission. The criteria for evaluation was composed into 2 parts an Object Detection score (IoU) and a Tracking evaluation match-mismatch combine into 1 score: MOTA. Please check the evaluation details on [the competition page](https://signate.jp/competitions/256#evaluation).
+No test set were provided, all the evaluation was done on Signate side, as we upload our source code for each submission. The criteria for evaluation was composed into 2 parts an Object Detection score (IoU) and a Tracking evaluation match-mismatch combine into a single score: MOTA. Please check the evaluation details on [the competition page](https://signate.jp/competitions/256#evaluation).
 
 ![mota](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/MOTA_formula.png)
-evaluation metric - MOTA
 
 
 
