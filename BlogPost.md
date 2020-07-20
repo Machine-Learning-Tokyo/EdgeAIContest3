@@ -1,7 +1,7 @@
 # Introduction
 
 
-<img align="left" src="nopic.png" alt="nopic" width="300"/>
+<img align="left" src="https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/mlt-logo.png" alt="nopic" width="300"/>
 
 MLT is a Tokyo-based nonprofit organization dedicated to democratizing Machine Learning. We are a team of ML Engineers and Researchers and a community of more than 6000 people.
 Our mission is to create, grow and sustain an inclusive, collaborative and engineering focused environment for students and professionals. Together we facilitate opportunities to learn, study and work on Machine Learning and Deep Learning projects and support individuals to reach their fullest potential.
@@ -16,7 +16,7 @@ On top of that, the field of [MoT](https://en.wikipedia.org/wiki/Multiple_object
 
 After 3 months of hard and fully remote work, we achieved a third position in the competition, over 35 teams (total of 305 participants). We would like to congratulate all the other teams for the hard competition as even at the very last minute we were at the 5th position. Some solutions were disclosed in the [competition forum](https://signate.jp/competitions/256/discussions/solution-of-irafm-ai-team).
 
-![final_ranking.png](Signate_final_results.png)
+![final_ranking.png](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/Signate_final_results.png)
 
 The following section will explain the contest content, then we will detail our solution architecture, and finally sum-up the learned lesson on this context.
 
@@ -32,11 +32,11 @@ We were given a total of 25 videos (each video consisting of 600 frames), with s
 
 number of images per class ?
 
-![overview](notebook/all_video.png)
+![overview](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/notebook/all_video.png)
 
 No test set were provided, all the evaluation was done on Signate side, as we upload our source code for each submission. The criteria for evaluation was composed into 2 parts an Object Detection score (IoU) and a Tracking evaluation match-mismatch combine into 1 score: MOTA. Please check the evaluation details on [the competition page](https://signate.jp/competitions/256#evaluation).
 
-![mota](MOTA_formula.png)
+![mota](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/MOTA_formula.png)
 evaluation metric - MOTA
 
 
@@ -70,7 +70,7 @@ There are mainly two types of deep learning based object detection algorithms:
 
 - single-stage/single-shot object detectors: SSD, YOLO, RetinaNet.
 
-![overview](notebook/overview.png)
+![overview](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/notebook/overview.png)
 
 Since single-stage object detectors are faster and this contest was about edge AI, we decided to use single-stage object detector - RetinaNet because it is really efficient with dense and small scale objects while assuring fast inference for edge device application as being a single stage detector and we already had an experience on training RetinaNet model. Please have a look at [the annotated paper](https://github.com/Machine-Learning-Tokyo/papers-with-annotations/blob/master/object-detection/RetinaNet.pdf) to learn more about this architecture.
 
@@ -128,11 +128,11 @@ The disappeared objects are also kept in the tracker for a while and can be matc
 
 - Here is a sample output from Object Detection.
 Green box is Car, while Red box is Pedestrian.
-![object_detection](object_detection.gif)
+![object_detection](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/object_detection.gif)
 
 - Here is sample output from Object Tracking.
 The color change when the assigned box id change.
-![object_tracking](object_tracking.gif)
+![object_tracking](https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/object_tracking.gif)
 
 # What we have tried and didn't work?
 - Test time augmentations:  "brightening", "darkening", "right crop", "left crop" augmentations did not work well. Only "horizontal flip" helped to increase the overall performance.
@@ -177,7 +177,7 @@ Here is a list of lesson learned (the hard way  ):
 - Running the entire pipeline for submission once is quite important to keep team motivation.
 - Documentation of evaluation results in tabular format while fine tuning a model.
 
-<img src="parameter_training.png" alt="parameter_training" width="600"/>
+<img src="https://github.com/Machine-Learning-Tokyo/EdgeAIContest3/blob/master/imgs/parameter_training.png" alt="parameter_training" width="600"/>
 
 #### What can be improved:
 
