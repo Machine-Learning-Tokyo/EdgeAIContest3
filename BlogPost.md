@@ -1,7 +1,7 @@
 # Introduction
 
 
-<img align="left" src="nopic.png" alt="nopic" width="400"/>
+<img align="left" src="nopic.png" alt="nopic" width="300"/>
 
 MLT is a Tokyo-based nonprofit organization dedicated to democratizing Machine Learning. We are a team of ML Engineers and Researchers and a community of more than 6000 people.
 Our mission is to create, grow and sustain an inclusive, collaborative and engineering focused environment for students and professionals. Together we facilitate opportunities to learn, study and work on Machine Learning and Deep Learning projects and support individuals to reach their fullest potential.
