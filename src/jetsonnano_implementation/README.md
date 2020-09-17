@@ -1,7 +1,7 @@
 # Running this project on Edge [WIP]
 
 
-![object_tracking](jetson_pic.jpg)
+![object_tracking](images/jetson_pic.jpg)
 
 ## The idea
 We wanted to deploy our solution on edge to pursue the project to real application. We decided to build an application for bike:
@@ -9,6 +9,8 @@ We wanted to deploy our solution on edge to pursue the project to real applicati
 
 ## Hardware
 We decided to deploy our solution on a [Jetson Nano Board](https://developer.nvidia.com/embedded/jetson-nano-developer-kit) *mostly for practical reason,available by the team member, and small enough to be attached on the bike.*
+
+![on_bike](images/on_bike.jpg)
 
 ## Set up
 
@@ -32,9 +34,34 @@ git clone https://github.com/fizyr/keras-retinanet.git
 pip install .
 ```
 
-#### Performances
-In order to have *acceptable inference speed* we retrain the model with a lower resolution, and tune some parameters. We currently have an inference speed of **2.5 sec** for 3 tracked object.
+### Run the code
 
-#### Improvement
+Run the main script: *jetson_inf_stream.py*:
+```
+python jetson_inf_stream.py -m small_resolution_resnet50_csv_11.h5
+```
+
+By default, the script run with USB camera and no stream output, but you can change this with:
+```
+python jetson_inf_stream.py -h
+-m MODEL_FILE, --model MODEL_FILE
+                        Model file (.tflite)
+--csi                 CSI camera type
+--OUT                 gstreamer ouput
+```
+
+
+
+### Performances
+In order to have *acceptable inference speed* we retrain the model with a lower resolution, and tune some parameters. We currently have an inference speed of:
+- **0.95 sec for O object**.
+- **1.2 sec for 3 tracked object**
+
+
+Concerning the postprocessing parameters (detection threshold / NMS threshold / new heuristic), the tunning is still ongoing as we change our model resolution.
+
+![pedestrian_tracking](images/pedestrian.gif)
+
+### Improvement
 - Build a TensorRT version of retinatnet. Currently lot of ops are not supported by RT, and so make the convertion impossible.
 - Ideas ? Please feel free to share
